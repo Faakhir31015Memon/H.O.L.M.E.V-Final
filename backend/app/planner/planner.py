@@ -24,7 +24,7 @@ class ExecutionPlan(BaseModel):
 class AgentPlanner:
     async def create_and_execute_plan(self, user_query: str, plan_spec: Dict[str, Any]) -> Tuple[ExecutionPlan, Dict[str, Any]]:
         plan_id = f"plan_{uuid.uuid4().hex[:8]}"
-        tool_name = plan_spec.get("tool")
+        tool_name = str(plan_spec.get("tool") or "")
         arguments = plan_spec.get("arguments", {})
 
         step = TaskStep(

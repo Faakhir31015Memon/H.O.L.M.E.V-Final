@@ -4,7 +4,7 @@ import { Mic, MicOff, Volume2, Radio, Activity, AlertCircle } from 'lucide-react
 
 export const MicrophoneUI: React.FC = () => {
   const { voiceDiag, setVoiceDiag, micAudioLevel, setMicAudioLevel, addMessage } = useHolmevStore();
-  const [isListening, setIsListening] = useState<bool>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
