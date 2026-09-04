@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from python-services.voice.voice_manager import voice_manager
+from python_services.voice.voice_manager import voice_manager
 
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice"])
 

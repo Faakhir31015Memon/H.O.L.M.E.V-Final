@@ -9,8 +9,8 @@ class HealthResponse(BaseModel):
 
 @router.get("/health", response_model=HealthResponse)
 async def get_health():
-    from python-services.voice.voice_manager import voice_manager
-    from python-services.vision.vision_service import vision_service
+    from python_services.voice.voice_manager import voice_manager
+    from python_services.vision.vision_service import vision_service
 
     voice_diag = voice_manager.get_diagnostics()
     vision_diag = vision_service.capture_frame_analysis()

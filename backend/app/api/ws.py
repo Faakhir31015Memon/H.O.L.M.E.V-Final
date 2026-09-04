@@ -47,12 +47,12 @@ async def websocket_endpoint(websocket: WebSocket):
             msg_type = payload.get("type")
             
             if msg_type == "VOICE_INPUT":
-                from python-services.voice.voice_manager import voice_manager
+                from python_services.voice.voice_manager import voice_manager
                 res = await voice_manager.handle_user_speech(payload.get("text", ""))
                 await websocket.send_json({"type": "VOICE_RESPONSE", "data": res})
                 
             elif msg_type == "GESTURE_LANDMARKS":
-                from python-services.gesture.gesture_service import gesture_service
+                from python_services.gesture.gesture_service import gesture_service
                 res = gesture_service.process_camera_landmarks(payload.get("landmarks"))
                 await websocket.send_json({"type": "GESTURE_RESULT", "data": res})
 
