@@ -78,13 +78,54 @@ class VoiceManager:
             await self.cancel_tts()
 
         text_clean = text.lower().strip()
-        if "chal kaam par lag ja" in text_clean or "kaam par lag" in text_clean:
-            await self.activate_continuous_voice()
-            return {"status": "activated", "spoken": "Ji Boss, main active hoon. Kya hukum hai?"}
 
-        if "so ja" in text_clean or "sleep" in text_clean:
+        activation_keywords = [
+            "chal lag ja kam par",
+            "chal lag ja kaam par",
+            "chal kaam par lag ja",
+            "kaam par lag",
+            "kam par lag",
+            "lag ja kam",
+            "lag ja kaam",
+            "kaam par lag ja",
+            "holmev activate",
+            "activate holmev",
+            "sun holmev"
+        ]
+
+        deactivation_keywords = [
+            "so ja",
+            "sleep",
+            "deactivate",
+            "rest karo"
+        ]
+
+        if any(kw in text_clean for kw in activation_keywords):
+            await self.activate_continuous_voice()
+            return {
+                "status": "activated",
+                "state": self.state,
+                "spoken": "Ji Boss, main active hoon. Kya hukum hai?",
+                "spoken_response": "Ji Boss, main active hoon. Kya hukum hai?"
+            }
+
+        if any(kw in text_clean for kw in deactivation_keywords):
             await self.deactivate_continuous_voice()
-            return {"status": "deactivated", "spoken": "Alvida Boss."}
+            return {
+                "status": "deactivated",
+                "state": self.state,
+                "spoken": "Alvida Boss.",
+                "spoken_response": "Alvida Boss."
+            }
+
+        # If system is in DEACTIVATED state (standby mode)
+        if self.state == VoiceState.DEACTIVATED:
+            return {
+                "status": "standby",
+                "state": self.state,
+                "spoken": "System Standby mein hai. Activate karne ke liye boliye: 'Holmev chal lag ja kaam par'",
+                "spoken_response": "System Standby mein hai. Activate karne ke liye boliye: 'Holmev chal lag ja kaam par'"
+            }
 
         self.state = VoiceState.THINKING
         await self._broadcast_state()
@@ -93,7 +134,8 @@ class VoiceManager:
         brain_result = await holmev_brain.process_user_request(text)
 
         spoken_text = brain_result.get("spoken_response", "Task execute ho gaya hai.")
-        
+        brain_result["state"] = VoiceState.LISTENING
+
         # Start TTS output
         await self.speak(spoken_text)
 
