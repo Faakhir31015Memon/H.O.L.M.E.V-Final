@@ -90,14 +90,20 @@ class VoiceManager:
             "kaam par lag ja",
             "holmev activate",
             "activate holmev",
-            "sun holmev"
+            "sun holmev",
+            "चल लग जा काम पर",
+            "काम पर लग जा",
+            "काम पर लग",
+            "लग जा काम"
         ]
 
         deactivation_keywords = [
             "so ja",
             "sleep",
             "deactivate",
-            "rest karo"
+            "rest karo",
+            "सो जा",
+            "डीएक्टिवेट"
         ]
 
         if any(kw in text_clean for kw in activation_keywords):

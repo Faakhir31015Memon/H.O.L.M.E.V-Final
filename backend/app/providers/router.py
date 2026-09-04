@@ -40,36 +40,36 @@ class AIProviderRouter:
         text = user_input.lower().strip()
         
         # Desktop Application & Web Launch Intent
-        if any(w in text for w in ["notepad", "chrome", "browser", "youtube", "calculator", "calc", "folder", "directory", "open", "launch", "start", "kholo", "chalao", "banao"]):
-            if "youtube" in text:
+        if any(w in text for w in ["notepad", "chrome", "browser", "youtube", "calculator", "calc", "folder", "directory", "open", "launch", "start", "kholo", "chalao", "banao", "नोटपैड", "क्रोम", "खोलो", "चलाओ", "बनाओ", "कैलकुलेटर"]):
+            if any(w in text for w in ["youtube", "यूट्यूब"]):
                 return {
                     "tool": "browser.open",
                     "arguments": {"url": "https://www.youtube.com"},
                     "thought": "User requested opening YouTube."
                 }
-            if any(w in text for w in ["chrome", "browser", "google"]):
+            if any(w in text for w in ["chrome", "browser", "google", "क्रोम", "ब्राउजर"]):
                 return {
                     "tool": "browser.open",
                     "arguments": {"url": "https://www.google.com"},
                     "thought": "User requested opening browser/chrome."
                 }
-            if "notepad" in text:
+            if any(w in text for w in ["notepad", "नोटपैड"]):
                 return {
                     "tool": "desktop.open_application",
                     "arguments": {"application": "notepad"},
                     "thought": "User requested opening Notepad."
                 }
-            if any(w in text for w in ["calculator", "calc"]):
+            if any(w in text for w in ["calculator", "calc", "कैलकुलेटर"]):
                 return {
                     "tool": "desktop.open_application",
                     "arguments": {"application": "calculator"},
                     "thought": "User requested opening Calculator."
                 }
-            if any(w in text for w in ["folder", "directory"]):
+            if any(w in text for w in ["folder", "directory", "फ़ोल्डर", "फोल्डर"]):
                 parts = text.split()
                 name = "HOLMEV_Test"
                 for i, p in enumerate(parts):
-                    if p in ["folder", "directory"]:
+                    if p in ["folder", "directory", "फ़ोल्डर", "फोल्डर"]:
                         if i + 1 < len(parts):
                             name = parts[i+1]
                         elif i - 1 >= 0:

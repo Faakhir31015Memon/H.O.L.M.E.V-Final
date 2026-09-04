@@ -15,6 +15,8 @@ export const speakSpeechUtterance = (text: string) => {
 export const MicrophoneUI: React.FC = () => {
   const { voiceDiag, setVoiceDiag, micAudioLevel, setMicAudioLevel, addMessage } = useHolmevStore();
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [lastHeard, setLastHeard] = useState<string>("");
+  const [sttLang, setSttLang] = useState<string>("hi-IN");
   const isListeningRef = useRef<boolean>(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -32,13 +34,26 @@ export const MicrophoneUI: React.FC = () => {
       }
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.lang = sttLang;
 
       recognition.onresult = async (event: any) => {
-        const lastIndex = event.results.length - 1;
-        const transcript = event.results[lastIndex][0].transcript.trim();
+        let fullTranscript = '';
+        let isFinal = false;
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          fullTranscript += event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            isFinal = true;
+          }
+        }
+
+        const transcript = fullTranscript.trim();
         if (!transcript) return;
+
+        setLastHeard(transcript);
+
+        if (!isFinal) return;
 
         addMessage({
           id: `msg_user_${Date.now()}`,
@@ -82,6 +97,12 @@ export const MicrophoneUI: React.FC = () => {
 
       recognition.onerror = (err: any) => {
         console.warn("Speech recognition notice:", err);
+        if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
+          setVoiceDiag({
+            ...voiceDiag,
+            microphone_status: "BLOCKED (Click button to grant mic permission)"
+          });
+        }
       };
 
       recognition.onend = () => {
@@ -259,6 +280,33 @@ export const MicrophoneUI: React.FC = () => {
             </>
           )}
         </button>
+      </div>
+
+      {/* Live Mic Speech Heard Display */}
+      <div className="bg-slate-950/80 rounded-xl p-3 border border-cyan-500/30 mb-3 flex items-center justify-between text-xs font-mono">
+        <div className="flex items-center space-x-2 overflow-hidden mr-2">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+          <span className="text-slate-400 shrink-0">Speech Heard:</span>
+          <span className="text-cyan-300 font-bold tracking-wide truncate">
+            {lastHeard || 'Listening... Speak "Holmev chal lag ja kaam par" to activate'}
+          </span>
+        </div>
+        <select
+          value={sttLang}
+          onChange={(e) => {
+            const newLang = e.target.value;
+            setSttLang(newLang);
+            if (isListeningRef.current) {
+              stopSpeechRecognition();
+              setTimeout(() => startSpeechRecognition(), 150);
+            }
+          }}
+          className="bg-slate-900 border border-slate-700 text-slate-200 text-[10px] rounded-lg px-2 py-1 focus:outline-none shrink-0"
+        >
+          <option value="hi-IN">Hinglish / Hindi (hi-IN)</option>
+          <option value="en-IN">English India (en-IN)</option>
+          <option value="en-US">English US (en-US)</option>
+        </select>
       </div>
 
       {/* REAL Microphone Signal Bar Visualizer */}

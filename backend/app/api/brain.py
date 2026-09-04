@@ -10,5 +10,6 @@ class RequestInput(BaseModel):
 
 @router.post("/process")
 async def process_brain_request(payload: RequestInput):
-    result = await holmev_brain.process_user_request(payload.query, session_id=payload.session_id)
+    from python_services.voice.voice_manager import voice_manager
+    result = await voice_manager.handle_user_speech(payload.query)
     return result
