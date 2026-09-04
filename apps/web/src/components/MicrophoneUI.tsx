@@ -15,6 +15,7 @@ export const speakSpeechUtterance = (text: string) => {
 export const MicrophoneUI: React.FC = () => {
   const { voiceDiag, setVoiceDiag, micAudioLevel, setMicAudioLevel, addMessage } = useHolmevStore();
   const [isListening, setIsListening] = useState<boolean>(false);
+  const isListeningRef = useRef<boolean>(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -27,7 +28,7 @@ export const MicrophoneUI: React.FC = () => {
 
     try {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch(e) {}
       }
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -55,6 +56,15 @@ export const MicrophoneUI: React.FC = () => {
           const data = await resp.json();
           const spoken = data.spoken_response || data.spoken || 'Task executed successfully';
 
+          if (data.state) {
+            setVoiceDiag({
+              ...voiceDiag,
+              state: data.state,
+              microphone_status: data.state === "DEACTIVATED" ? "IDLE" : "CONNECTED",
+              active_audio_sessions: data.state === "DEACTIVATED" ? 0 : 1
+            });
+          }
+
           addMessage({
             id: `msg_ai_${Date.now()}`,
             role: 'assistant',
@@ -74,6 +84,14 @@ export const MicrophoneUI: React.FC = () => {
         console.warn("Speech recognition notice:", err);
       };
 
+      recognition.onend = () => {
+        if (isListeningRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {}
+        }
+      };
+
       recognition.start();
       recognitionRef.current = recognition;
     } catch (e) {
@@ -82,6 +100,7 @@ export const MicrophoneUI: React.FC = () => {
   };
 
   const stopSpeechRecognition = () => {
+    isListeningRef.current = false;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -122,6 +141,7 @@ export const MicrophoneUI: React.FC = () => {
 
       updateAudioMeter();
       setIsListening(true);
+      isListeningRef.current = true;
       startSpeechRecognition();
     } catch (err) {
       console.warn("Microphone access restricted or not connected:", err);
@@ -129,6 +149,7 @@ export const MicrophoneUI: React.FC = () => {
   };
 
   const stopRealMicrophone = () => {
+    isListeningRef.current = false;
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -193,6 +214,9 @@ export const MicrophoneUI: React.FC = () => {
   };
 
   useEffect(() => {
+    // Automatically enable mic on program run / page load
+    startRealMicrophone();
+
     return () => {
       stopRealMicrophone();
     };
