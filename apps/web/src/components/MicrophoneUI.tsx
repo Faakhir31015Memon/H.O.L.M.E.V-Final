@@ -51,9 +51,14 @@ export const MicrophoneUI: React.FC = () => {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.close();
+      } catch (e) {
+        // Safe handling if already closed
+      }
     }
+    audioContextRef.current = null;
     setIsListening(false);
     setMicAudioLevel(0);
   };

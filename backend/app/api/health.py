@@ -8,6 +8,8 @@ class HealthResponse(BaseModel):
     services: dict
 
 @router.get("/health", response_model=HealthResponse)
+@router.get("/api/health", response_model=HealthResponse)
+@router.get("/api/v1/health", response_model=HealthResponse)
 async def get_health():
     from python_services.voice.voice_manager import voice_manager
     from python_services.vision.vision_service import vision_service
@@ -28,9 +30,11 @@ async def get_health():
     )
 
 @router.get("/ready")
+@router.get("/api/ready")
 async def get_ready():
     return {"status": "ready"}
 
 @router.get("/version")
+@router.get("/api/version")
 async def get_version():
     return {"version": "1.0.0", "system": "H.O.L.M.E.V Personal AI OS"}
