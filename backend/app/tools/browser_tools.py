@@ -1,5 +1,6 @@
 from typing import Any
 import os
+import subprocess
 import webbrowser
 from pydantic import BaseModel, Field
 from app.tools.base import BaseTool, ToolResult
@@ -14,12 +15,12 @@ class BrowserOpenTool(BaseTool):
     permission_level = 1
     input_schema = OpenBrowserInput
 
-    async def _run(self, url: str, **kwargs: Any) -> ToolResult:
+    async def _run(self, url: str = "", **kwargs: Any) -> ToolResult:
         try:
             target_url = url if url.startswith("http") else f"https://{url}"
             webbrowser.open(target_url)
             if os.name == 'nt':
-                os.system(f'start "" "{target_url}"')
+                subprocess.Popen(f'start "" "{target_url}"', shell=True)
             return ToolResult(
                 success=True,
                 verified=True,

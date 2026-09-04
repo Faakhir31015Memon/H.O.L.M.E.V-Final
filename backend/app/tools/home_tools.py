@@ -15,7 +15,7 @@ class HomeDeviceControlTool(BaseTool):
     permission_level = 2
     input_schema = SetDevicePowerInput
 
-    async def _run(self, room: str, device_type: str, power: bool, speed: Optional[int] = None, **kwargs: Any) -> ToolResult:
+    async def _run(self, room: str = "", device_type: str = "", power: bool = False, speed: Optional[int] = None, **kwargs: Any) -> ToolResult:
         from app.devices.registry import device_registry
         
         device = await device_registry.resolve_device(room=room, device_type=device_type)
