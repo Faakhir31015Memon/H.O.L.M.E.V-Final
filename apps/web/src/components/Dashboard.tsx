@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useHolmevStore } from '../store/useHolmevStore';
-import { MicrophoneUI } from './MicrophoneUI';
+import { MicrophoneUI, speakSpeechUtterance } from './MicrophoneUI';
 import { Bot, Send, User, Sparkles, Lightbulb, Fan, Tv, Video, ShieldCheck } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -31,14 +31,18 @@ export const Dashboard: React.FC = () => {
         body: JSON.stringify({ query: userQuery })
       });
       const data = await resp.json();
+      const spoken = data.spoken_response || "Task executed successfully.";
 
       addMessage({
         id: `msg_ai_${Date.now()}`,
         role: "assistant",
-        content: data.spoken_response || "Task executed successfully.",
+        content: spoken,
         tool_name: data.tool,
         timestamp: new Date().toLocaleTimeString()
       });
+
+      // Speak audibly through speaker output
+      speakSpeechUtterance(spoken);
     } catch (err) {
       addMessage({
         id: `msg_err_${Date.now()}`,

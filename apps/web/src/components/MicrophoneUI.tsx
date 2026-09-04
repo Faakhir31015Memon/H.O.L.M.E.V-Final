@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useHolmevStore } from '../store/useHolmevStore';
-import { Mic, MicOff, Volume2, Radio, Activity, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, Radio } from 'lucide-react';
+
+export const speakSpeechUtterance = (text: string) => {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel(); // Barge-in cancellation
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+};
 
 export const MicrophoneUI: React.FC = () => {
   const { voiceDiag, setVoiceDiag, micAudioLevel, setMicAudioLevel, addMessage } = useHolmevStore();
@@ -8,6 +18,77 @@ export const MicrophoneUI: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Speech Recognition setup (STT)
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = async (event: any) => {
+        const lastIndex = event.results.length - 1;
+        const transcript = event.results[lastIndex][0].transcript.trim();
+        if (!transcript) return;
+
+        addMessage({
+          id: `msg_user_${Date.now()}`,
+          role: 'user',
+          content: transcript,
+          timestamp: new Date().toLocaleTimeString()
+        });
+
+        try {
+          const resp = await fetch('/api/v1/voice/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: transcript })
+          });
+          const data = await resp.json();
+          const spoken = data.spoken_response || data.spoken || 'Task executed successfully';
+
+          addMessage({
+            id: `msg_ai_${Date.now()}`,
+            role: 'assistant',
+            content: spoken,
+            tool_name: data.tool,
+            timestamp: new Date().toLocaleTimeString()
+          });
+
+          // Audible TTS Speech Output
+          speakSpeechUtterance(spoken);
+        } catch (e) {
+          console.error("Speech processing error:", e);
+        }
+      };
+
+      recognition.onerror = (err: any) => {
+        console.warn("Speech recognition notice:", err);
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (e) {
+      console.warn("Speech recognition initialization fallback:", e);
+    }
+  };
+
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+  };
 
   // Initialize real web microphone audio stream analyzer
   const startRealMicrophone = async () => {
@@ -41,6 +122,7 @@ export const MicrophoneUI: React.FC = () => {
 
       updateAudioMeter();
       setIsListening(true);
+      startSpeechRecognition();
     } catch (err) {
       console.warn("Microphone access restricted or not connected:", err);
     }
@@ -54,11 +136,10 @@ export const MicrophoneUI: React.FC = () => {
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try {
         audioContextRef.current.close();
-      } catch (e) {
-        // Safe handling if already closed
-      }
+      } catch (e) {}
     }
     audioContextRef.current = null;
+    stopSpeechRecognition();
     setIsListening(false);
     setMicAudioLevel(0);
   };
@@ -75,12 +156,14 @@ export const MicrophoneUI: React.FC = () => {
           microphone_status: "IDLE",
           active_audio_sessions: 0
         });
+        const msg = "Continuous Voice session DEACTIVATED (Holmev so ja).";
         addMessage({
           id: `msg_${Date.now()}`,
           role: "system",
-          content: "Continuous Voice session DEACTIVATED (Holmev so ja).",
+          content: msg,
           timestamp: new Date().toLocaleTimeString()
         });
+        speakSpeechUtterance(msg);
       } catch (e) {
         console.error(e);
       }
@@ -95,12 +178,14 @@ export const MicrophoneUI: React.FC = () => {
           microphone_status: "CONNECTED",
           active_audio_sessions: 1
         });
+        const msg = "Continuous Voice session ACTIVATED. Kya hukum hai Boss?";
         addMessage({
           id: `msg_${Date.now()}`,
           role: "system",
-          content: "Continuous Voice session ACTIVATED (Holmev chal kaam par lag ja).",
+          content: msg,
           timestamp: new Date().toLocaleTimeString()
         });
+        speakSpeechUtterance(msg);
       } catch (e) {
         console.error(e);
       }
