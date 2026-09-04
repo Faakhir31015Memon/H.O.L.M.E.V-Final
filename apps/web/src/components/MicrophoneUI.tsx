@@ -34,65 +34,16 @@ export const MicrophoneUI: React.FC = () => {
       }
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
-      recognition.interimResults = true;
+      recognition.interimResults = false;
       recognition.lang = sttLang;
 
       recognition.onresult = async (event: any) => {
-        let fullTranscript = '';
-        let isFinal = false;
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          fullTranscript += event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            isFinal = true;
-          }
-        }
-
-        const transcript = fullTranscript.trim();
+        const lastIndex = event.results.length - 1;
+        const transcript = event.results[lastIndex][0].transcript.trim();
         if (!transcript) return;
 
         setLastHeard(transcript);
-
-        if (!isFinal) return;
-
-        addMessage({
-          id: `msg_user_${Date.now()}`,
-          role: 'user',
-          content: transcript,
-          timestamp: new Date().toLocaleTimeString()
-        });
-
-        try {
-          const resp = await fetch('/api/v1/voice/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: transcript })
-          });
-          const data = await resp.json();
-          const spoken = data.spoken_response || data.spoken || 'Task executed successfully';
-
-          if (data.state) {
-            setVoiceDiag({
-              ...voiceDiag,
-              state: data.state,
-              microphone_status: data.state === "DEACTIVATED" ? "IDLE" : "CONNECTED",
-              active_audio_sessions: data.state === "DEACTIVATED" ? 0 : 1
-            });
-          }
-
-          addMessage({
-            id: `msg_ai_${Date.now()}`,
-            role: 'assistant',
-            content: spoken,
-            tool_name: data.tool,
-            timestamp: new Date().toLocaleTimeString()
-          });
-
-          // Audible TTS Speech Output
-          speakSpeechUtterance(spoken);
-        } catch (e) {
-          console.error("Speech processing error:", e);
-        }
+        await sendVoiceCommand(transcript);
       };
 
       recognition.onerror = (err: any) => {
@@ -117,6 +68,47 @@ export const MicrophoneUI: React.FC = () => {
       recognitionRef.current = recognition;
     } catch (e) {
       console.warn("Speech recognition initialization fallback:", e);
+    }
+  };
+
+  const sendVoiceCommand = async (text: string) => {
+    addMessage({
+      id: `msg_user_${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date().toLocaleTimeString()
+    });
+
+    try {
+      const resp = await fetch('/api/v1/voice/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await resp.json();
+      const spoken = data.spoken_response || data.spoken || 'Task executed successfully';
+
+      if (data.state) {
+        setVoiceDiag({
+          ...voiceDiag,
+          state: data.state,
+          microphone_status: data.state === "DEACTIVATED" ? "IDLE" : "CONNECTED",
+          active_audio_sessions: data.state === "DEACTIVATED" ? 0 : 1
+        });
+      }
+
+      addMessage({
+        id: `msg_ai_${Date.now()}`,
+        role: 'assistant',
+        content: spoken,
+        tool_name: data.tool,
+        timestamp: new Date().toLocaleTimeString()
+      });
+
+      // Audible TTS Speech Output
+      speakSpeechUtterance(spoken);
+    } catch (e) {
+      console.error("Speech processing error:", e);
     }
   };
 
@@ -288,7 +280,7 @@ export const MicrophoneUI: React.FC = () => {
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
           <span className="text-slate-400 shrink-0">Speech Heard:</span>
           <span className="text-cyan-300 font-bold tracking-wide truncate">
-            {lastHeard || 'Listening... Speak "Holmev chal lag ja kaam par" to activate'}
+            {lastHeard || 'Listening... Speak "Notepad kholo" or "Holmev chal kaam par lag ja"'}
           </span>
         </div>
         <select
@@ -309,18 +301,33 @@ export const MicrophoneUI: React.FC = () => {
         </select>
       </div>
 
-      {/* REAL Microphone Signal Bar Visualizer */}
-      <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80 mb-4">
-        <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-          <span>Real Hardware Mic Amplitude Signal</span>
-          <span className="text-cyan-400 font-bold">{(micAudioLevel * 100).toFixed(1)}%</span>
-        </div>
-        <div className="h-3 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800 flex items-center p-0.5">
-          <div
-            className="h-full bg-gradient-to-r from-cyan-500 via-emerald-400 to-amber-400 rounded-full transition-all duration-75"
-            style={{ width: `${Math.max(2, micAudioLevel * 100)}%` }}
-          />
-        </div>
+      {/* Quick Voice Command Chips */}
+      <div className="flex items-center space-x-2 mb-4 overflow-x-auto text-[11px] font-mono text-slate-300">
+        <span className="text-slate-500 shrink-0">Quick Actions:</span>
+        <button
+          onClick={() => { setLastHeard("notepad kholo"); sendVoiceCommand("notepad kholo"); }}
+          className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 px-3 py-1 rounded-lg shrink-0 transition-all"
+        >
+          🚀 Notepad Kholo
+        </button>
+        <button
+          onClick={() => { setLastHeard("chrome kholo"); sendVoiceCommand("chrome kholo"); }}
+          className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 px-3 py-1 rounded-lg shrink-0 transition-all"
+        >
+          🌐 Chrome Kholo
+        </button>
+        <button
+          onClick={() => { setLastHeard("calculator kholo"); sendVoiceCommand("calculator kholo"); }}
+          className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 px-3 py-1 rounded-lg shrink-0 transition-all"
+        >
+          🧮 Calculator Kholo
+        </button>
+        <button
+          onClick={() => { setLastHeard("Holmev chal kaam par lag ja"); sendVoiceCommand("Holmev chal kaam par lag ja"); }}
+          className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 px-3 py-1 rounded-lg shrink-0 transition-all"
+        >
+          ⚡ Activate
+        </button>
       </div>
 
       {/* Telemetry Status Grid */}

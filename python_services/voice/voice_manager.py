@@ -124,14 +124,11 @@ class VoiceManager:
                 "spoken_response": "Alvida Boss."
             }
 
-        # If system is in DEACTIVATED state (standby mode)
+        # Auto-activate when any command is spoken
         if self.state == VoiceState.DEACTIVATED:
-            return {
-                "status": "standby",
-                "state": self.state,
-                "spoken": "System Standby mein hai. Activate karne ke liye boliye: 'Holmev chal lag ja kaam par'",
-                "spoken_response": "System Standby mein hai. Activate karne ke liye boliye: 'Holmev chal lag ja kaam par'"
-            }
+            self.state = VoiceState.LISTENING
+            self.is_listening = True
+            self.active_audio_sessions = 1
 
         self.state = VoiceState.THINKING
         await self._broadcast_state()
