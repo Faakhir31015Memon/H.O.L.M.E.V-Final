@@ -14,7 +14,7 @@ class Create3DObjectTool(BaseTool):
     permission_level = 1
     input_schema = Create3DObjectInput
 
-    async def _run(self, object_type: str, position: list = [0, 0, 0], color: str = "#00f0ff", **kwargs: Any) -> ToolResult:
+    async def _run(self, object_type: str = "cube", position: list = [0, 0, 0], color: str = "#00f0ff", **kwargs: Any) -> ToolResult:
         from app.projects.threed_manager import threed_manager
         
         obj = threed_manager.create_object(object_type=object_type, position=position, color=color)
