@@ -1,7 +1,11 @@
 import os
 import subprocess
+from typing import Any
 import psutil
-import pyautogui
+try:
+    import pyautogui  # type: ignore
+except ImportError:
+    pyautogui = None
 from pydantic import BaseModel, Field
 from app.tools.base import BaseTool, ToolResult
 from app.security.sanitizer import get_allowed_app_command, validate_safe_path
@@ -16,7 +20,7 @@ class OpenApplicationTool(BaseTool):
     permission_level = 1
     input_schema = OpenAppInput
 
-    async def _run(self, application: str) -> ToolResult:
+    async def _run(self, application: str, **kwargs: Any) -> ToolResult:
         try:
             app_clean = application.lower().strip()
             if os.name == 'nt':
@@ -52,7 +56,7 @@ class CreateFolderTool(BaseTool):
     permission_level = 1
     input_schema = CreateFolderInput
 
-    async def _run(self, folder_path: str) -> ToolResult:
+    async def _run(self, folder_path: str, **kwargs: Any) -> ToolResult:
         try:
             safe_path = validate_safe_path(folder_path)
             os.makedirs(safe_path, exist_ok=True)
@@ -76,8 +80,10 @@ class TypeTextTool(BaseTool):
     permission_level = 1
     input_schema = TypeTextInput
 
-    async def _run(self, text: str) -> ToolResult:
+    async def _run(self, text: str, **kwargs: Any) -> ToolResult:
         try:
+            if pyautogui is None:
+                return ToolResult(success=False, verified=False, error="pyautogui package is not available")
             pyautogui.write(text, interval=0.02)
             return ToolResult(
                 success=True,
