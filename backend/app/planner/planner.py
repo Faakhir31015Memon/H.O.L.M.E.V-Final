@@ -1,6 +1,6 @@
 import uuid
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from pydantic import BaseModel
 from app.tools.registry import tool_registry
 from app.permissions.engine import permission_engine, PermissionCheckResult
