@@ -39,37 +39,53 @@ class AIProviderRouter:
         """
         text = user_input.lower().strip()
         
-        # Desktop Application Launch Intent
-        if any(w in text for w in ["open", "launch", "start", "kholo", "chalao", "banao"]):
-            if any(w in text for w in ["chrome", "browser", "browser kholo"]):
-                return {
-                    "tool": "browser.open",
-                    "arguments": {"url": "https://www.google.com"},
-                    "thought": "User requested opening browser/chrome."
-                }
-            if any(w in text for w in ["youtube"]):
+        # Desktop Application & Web Launch Intent
+        if any(w in text for w in ["notepad", "chrome", "browser", "youtube", "calculator", "calc", "folder", "directory", "open", "launch", "start", "kholo", "chalao", "banao"]):
+            if "youtube" in text:
                 return {
                     "tool": "browser.open",
                     "arguments": {"url": "https://www.youtube.com"},
                     "thought": "User requested opening YouTube."
                 }
-            if any(w in text for w in ["notepad"]):
+            if any(w in text for w in ["chrome", "browser", "google"]):
+                return {
+                    "tool": "browser.open",
+                    "arguments": {"url": "https://www.google.com"},
+                    "thought": "User requested opening browser/chrome."
+                }
+            if "notepad" in text:
                 return {
                     "tool": "desktop.open_application",
                     "arguments": {"application": "notepad"},
                     "thought": "User requested opening Notepad."
                 }
+            if any(w in text for w in ["calculator", "calc"]):
+                return {
+                    "tool": "desktop.open_application",
+                    "arguments": {"application": "calculator"},
+                    "thought": "User requested opening Calculator."
+                }
             if any(w in text for w in ["folder", "directory"]):
-                # Extract potential folder name or path
                 parts = text.split()
                 name = "HOLMEV_Test"
                 for i, p in enumerate(parts):
-                    if p in ["folder", "directory"] and i > 0:
-                        name = parts[i-1]
+                    if p in ["folder", "directory"]:
+                        if i + 1 < len(parts):
+                            name = parts[i+1]
+                        elif i - 1 >= 0:
+                            name = parts[i-1]
                 return {
                     "tool": "desktop.create_folder",
                     "arguments": {"folder_path": f"./{name}"},
                     "thought": "User requested creating a directory."
+                }
+            # Fallback app launch for single keywords e.g. "cmd", "paint"
+            words = [w for w in text.split() if w not in ["open", "launch", "start", "kholo", "chalao", "banao", "karo", "please"]]
+            if words:
+                return {
+                    "tool": "desktop.open_application",
+                    "arguments": {"application": words[0]},
+                    "thought": f"User requested opening {words[0]}."
                 }
 
         # Text Typing Intent
