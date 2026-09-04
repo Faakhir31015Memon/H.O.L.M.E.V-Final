@@ -35,6 +35,13 @@ dev = [
     "mypy>=1.9.0",
 ]
 
+[tool.pyright]
+extraPaths = [
+    ".",
+    "../backend",
+    "../python_services"
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

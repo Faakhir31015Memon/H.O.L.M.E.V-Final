@@ -13,7 +13,11 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
-from app.events.bus import event_bus, SystemEvent
+
+try:
+    from app.events.bus import event_bus, SystemEvent
+except ImportError:
+    from backend.app.events.bus import event_bus, SystemEvent
 
 logger = logging.getLogger("holmev.voice")
 
@@ -89,7 +93,11 @@ class VoiceManager:
         self.state = VoiceState.THINKING
         await self._broadcast_state()
 
-        from app.brain.brain import holmev_brain
+        try:
+            from app.brain.brain import holmev_brain
+        except ImportError:
+            from backend.app.brain.brain import holmev_brain
+
         brain_result = await holmev_brain.process_user_request(text)
 
         spoken_text = brain_result.get("spoken_response", "Task execute ho gaya hai.")

@@ -1,0 +1,9 @@
+[tool.pyright]
+extraPaths = [
+    "backend",
+    "python_services"
+]
+
+[tool.mypy]
+mypy_path = "backend:python_services"
+ignore_missing_imports = true
