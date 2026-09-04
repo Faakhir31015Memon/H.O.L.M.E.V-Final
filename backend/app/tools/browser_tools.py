@@ -1,3 +1,4 @@
+from typing import Any
 import os
 import webbrowser
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ class BrowserOpenTool(BaseTool):
     permission_level = 1
     input_schema = OpenBrowserInput
 
-    async def _run(self, url: str) -> ToolResult:
+    async def _run(self, url: str, **kwargs: Any) -> ToolResult:
         try:
             target_url = url if url.startswith("http") else f"https://{url}"
             webbrowser.open(target_url)

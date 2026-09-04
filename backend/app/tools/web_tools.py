@@ -1,3 +1,4 @@
+from typing import Any
 import httpx
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ class WebSearchTool(BaseTool):
     permission_level = 0
     input_schema = WebSearchInput
 
-    async def _run(self, query: str) -> ToolResult:
+    async def _run(self, query: str, **kwargs: Any) -> ToolResult:
         try:
             # Live web search using DuckDuckGo HTML endpoint
             async with httpx.AsyncClient(timeout=10.0) as client:
