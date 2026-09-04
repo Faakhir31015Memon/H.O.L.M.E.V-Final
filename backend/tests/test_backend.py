@@ -1,11 +1,10 @@
 import pytest
-import asyncio
 from fastapi.testclient import TestClient
 from app.main import app
 from app.tools.registry import tool_registry
 from app.permissions.engine import permission_engine
 from app.brain.brain import holmev_brain
-from python-services.voice.voice_manager import voice_manager
+from python_services.voice.voice_manager import voice_manager
 from app.circuits.simulator import circuit_simulator
 
 client = TestClient(app)
