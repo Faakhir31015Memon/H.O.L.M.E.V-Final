@@ -14,7 +14,7 @@ class Create3DObjectTool(BaseTool):
     permission_level = 1
     input_schema = Create3DObjectInput
 
-    async def _run(self, object_type: str, position: list = [0, 0, 0], color: str = "#00f0ff") -> ToolResult:
+    async def _run(self, object_type: str, position: list = [0, 0, 0], color: str = "#00f0ff", **kwargs: Any) -> ToolResult:
         from app.projects.threed_manager import threed_manager
         
         obj = threed_manager.create_object(object_type=object_type, position=position, color=color)
@@ -37,7 +37,7 @@ class Transform3DObjectTool(BaseTool):
     permission_level = 1
     input_schema = Transform3DObjectInput
 
-    async def _run(self, object_id: Optional[str] = None, position: Optional[list] = None, scale: Optional[list] = None) -> ToolResult:
+    async def _run(self, object_id: Optional[str] = None, position: Optional[list] = None, scale: Optional[list] = None, **kwargs: Any) -> ToolResult:
         from app.projects.threed_manager import threed_manager
         
         updated_obj, err = threed_manager.transform_object(object_id=object_id, position=position, scale=scale)

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, Field
 from app.tools.base import BaseTool, ToolResult
 
@@ -14,7 +14,7 @@ class MemoryStoreTool(BaseTool):
     permission_level = 1
     input_schema = MemoryStoreInput
 
-    async def _run(self, category: str, key: str, value: str) -> ToolResult:
+    async def _run(self, category: str, key: str, value: str, **kwargs: Any) -> ToolResult:
         from app.memory.store import memory_store
         
         item = await memory_store.store_memory(category=category, key=key, value=value)
@@ -35,7 +35,7 @@ class MemoryRetrieveTool(BaseTool):
     permission_level = 0
     input_schema = MemoryRetrieveInput
 
-    async def _run(self, query: str) -> ToolResult:
+    async def _run(self, query: str, **kwargs: Any) -> ToolResult:
         from app.memory.store import memory_store
         
         results = await memory_store.retrieve_memories(query=query)

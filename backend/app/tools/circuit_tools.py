@@ -1,3 +1,4 @@
+from typing import Any
 from pydantic import BaseModel, Field
 from app.tools.base import BaseTool, ToolResult
 
@@ -11,7 +12,7 @@ class CreateCircuitTool(BaseTool):
     permission_level = 1
     input_schema = CreateCircuitInput
 
-    async def _run(self, circuit_type: str = "led") -> ToolResult:
+    async def _run(self, circuit_type: str = "led", **kwargs: Any) -> ToolResult:
         from app.circuits.simulator import circuit_simulator
         
         data = circuit_simulator.create_led_circuit()
@@ -32,7 +33,7 @@ class SimulateCircuitTool(BaseTool):
     permission_level = 0
     input_schema = SimulateCircuitInput
 
-    async def _run(self, circuit_id: str = "current") -> ToolResult:
+    async def _run(self, circuit_id: str = "current", **kwargs: Any) -> ToolResult:
         from app.circuits.simulator import circuit_simulator
         
         sim_data = circuit_simulator.simulate()
