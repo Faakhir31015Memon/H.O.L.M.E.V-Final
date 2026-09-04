@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Any, Optional, Callable, Awaitable
+from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from app.events.bus import event_bus, SystemEvent
 
@@ -39,13 +39,10 @@ class VoiceManager:
 
     async def activate_continuous_voice(self):
         """Activation: 'Holmev chal kaam par lag ja' -> transitions to LISTENING loop."""
-        if self.state in [VoiceState.LISTENING, VoiceState.SPEAKING, VoiceState.THINKING]:
-            return
-        
         self.state = VoiceState.ACTIVATING
         await self._broadcast_state()
         
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
         self.state = VoiceState.LISTENING
         self.is_listening = True
         self.active_audio_sessions = 1
@@ -68,10 +65,7 @@ class VoiceManager:
         # Check for barge-in interruption if system is currently speaking
         if self.is_speaking:
             await self.cancel_tts()
-            self.state = VoiceState.INTERRUPTED
-            await self._broadcast_state()
 
-        # Activation keyword check
         text_clean = text.lower().strip()
         if "chal kaam par lag ja" in text_clean or "kaam par lag" in text_clean:
             await self.activate_continuous_voice()
@@ -101,25 +95,23 @@ class VoiceManager:
 
     async def speak(self, text: str):
         """Plays TTS audio with barge-in support."""
-        if self.is_speaking:
-            await self.cancel_tts()
-
         self.state = VoiceState.SPEAKING
         self.is_speaking = True
         await self._broadcast_state()
 
         try:
-            # Simulate real non-blocking TTS audio streaming chunk play
-            for i in range(len(text.split())):
+            # Simulate non-blocking TTS audio playback
+            for i in range(5):
                 if not self.is_speaking:
                     break
-                await asyncio.sleep(0.08)
+                await asyncio.sleep(0.02)
         finally:
-            self.is_speaking = False
+            if self.is_speaking:
+                self.is_speaking = False
 
     async def cancel_tts(self):
         """Immediate barge-in cancellation."""
-        if self.is_speaking:
+        if self.is_speaking or self.state == VoiceState.SPEAKING:
             self.is_speaking = False
             self.state = VoiceState.INTERRUPTED
             await self._broadcast_state()
