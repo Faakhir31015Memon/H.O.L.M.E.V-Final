@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-# Add backend and monorepo root to sys.path
+# Add backend directory to sys.path
 root_dir = Path(__file__).resolve().parent.parent.parent
 backend_dir = root_dir / "backend"
 if str(backend_dir) not in sys.path:
@@ -13,11 +13,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
-
-try:
-    from app.events.bus import event_bus, SystemEvent
-except ImportError:
-    from backend.app.events.bus import event_bus, SystemEvent
+from app.events.bus import event_bus, SystemEvent
 
 logger = logging.getLogger("holmev.voice")
 
@@ -93,11 +89,7 @@ class VoiceManager:
         self.state = VoiceState.THINKING
         await self._broadcast_state()
 
-        try:
-            from app.brain.brain import holmev_brain
-        except ImportError:
-            from backend.app.brain.brain import holmev_brain
-
+        from app.brain.brain import holmev_brain
         brain_result = await holmev_brain.process_user_request(text)
 
         spoken_text = brain_result.get("spoken_response", "Task execute ho gaya hai.")
