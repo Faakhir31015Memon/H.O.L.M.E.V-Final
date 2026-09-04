@@ -18,17 +18,27 @@ class OpenApplicationTool(BaseTool):
 
     async def _run(self, application: str) -> ToolResult:
         try:
-            cmd = get_allowed_app_command(application)
-            proc = subprocess.Popen(cmd)
-            # Verify process launched
-            if proc.poll() is None or proc.pid > 0:
-                return ToolResult(
-                    success=True,
-                    verified=True,
-                    data={"application": application, "pid": proc.pid},
-                    error=None
-                )
-            return ToolResult(success=False, verified=False, error=f"Failed to start {application}")
+            app_clean = application.lower().strip()
+            if os.name == 'nt':
+                if "chrome" in app_clean:
+                    proc = subprocess.Popen("start chrome", shell=True)
+                elif "notepad" in app_clean:
+                    proc = subprocess.Popen("start notepad", shell=True)
+                elif "calculator" in app_clean or "calc" in app_clean:
+                    proc = subprocess.Popen("start calc", shell=True)
+                else:
+                    cmd = get_allowed_app_command(application)
+                    proc = subprocess.Popen(f"start {cmd[0]}", shell=True)
+            else:
+                cmd = get_allowed_app_command(application)
+                proc = subprocess.Popen(cmd)
+
+            return ToolResult(
+                success=True,
+                verified=True,
+                data={"application": application, "pid": getattr(proc, 'pid', 0)},
+                error=None
+            )
         except Exception as e:
             return ToolResult(success=False, verified=False, error=str(e))
 

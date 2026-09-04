@@ -1,9 +1,10 @@
-import asyncio
+import os
+import webbrowser
 from pydantic import BaseModel, Field
 from app.tools.base import BaseTool, ToolResult
 
 class OpenBrowserInput(BaseModel):
-    url: str = Field(description="URL to open, e.g. https://www.youtube.com")
+    url: str = Field(description="URL to open, e.g. https://www.google.com or https://www.youtube.com")
 
 class BrowserOpenTool(BaseTool):
     name = "browser.open"
@@ -14,14 +15,14 @@ class BrowserOpenTool(BaseTool):
 
     async def _run(self, url: str) -> ToolResult:
         try:
-            import subprocess
-            import webbrowser
-            # Real web browser navigation
-            webbrowser.open(url)
+            target_url = url if url.startswith("http") else f"https://{url}"
+            webbrowser.open(target_url)
+            if os.name == 'nt':
+                os.system(f'start "" "{target_url}"')
             return ToolResult(
                 success=True,
                 verified=True,
-                data={"url": url, "action": "browser_opened"},
+                data={"url": target_url, "action": "browser_opened"},
                 error=None
             )
         except Exception as e:
