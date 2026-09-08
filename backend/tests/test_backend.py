@@ -52,9 +52,12 @@ async def test_voice_manager_continuous_activation():
     assert diag2.active_audio_sessions == 1
 
     # Test barge in
-    await voice_manager.speak("Hello Boss testing speech output")
+    import asyncio
+    speak_task = asyncio.create_task(voice_manager.speak("Hello Boss testing speech output"))
+    await asyncio.sleep(0.01)
     assert voice_manager.is_speaking is True
     await voice_manager.cancel_tts()
+    await speak_task
     assert voice_manager.is_speaking is False
     assert voice_manager.state == "INTERRUPTED"
 
