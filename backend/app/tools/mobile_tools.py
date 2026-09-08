@@ -14,7 +14,7 @@ class WhatsAppMessageTool(BaseTool):
     permission_level = 2
     input_schema = WhatsAppMessageInput
 
-    async def _run(self, recipient: str, message: str, **kwargs: Any) -> ToolResult:
+    async def _run(self, recipient: str = "", message: str = "", **kwargs: Any) -> ToolResult:
         res = mobile_bridge_service.send_whatsapp_message(recipient, message)
         return ToolResult(
             success=True,
@@ -33,7 +33,7 @@ class PhoneCallTool(BaseTool):
     permission_level = 3
     input_schema = PhoneCallInput
 
-    async def _run(self, contact: str, **kwargs: Any) -> ToolResult:
+    async def _run(self, contact: str = "", **kwargs: Any) -> ToolResult:
         res = mobile_bridge_service.make_phone_call(contact)
         return ToolResult(
             success=True,
@@ -54,7 +54,7 @@ class SendEmailTool(BaseTool):
     permission_level = 2
     input_schema = SendEmailInput
 
-    async def _run(self, recipient_email: str, subject: str, body: str, **kwargs: Any) -> ToolResult:
+    async def _run(self, recipient_email: str = "", subject: str = "", body: str = "", **kwargs: Any) -> ToolResult:
         res = mobile_bridge_service.send_email(recipient_email, subject, body)
         return ToolResult(
             success=True,

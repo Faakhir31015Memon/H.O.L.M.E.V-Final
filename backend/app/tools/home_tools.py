@@ -78,7 +78,7 @@ class IRLearnTool(BaseTool):
     permission_level = 1
     input_schema = IRLearnInput
 
-    async def _run(self, device_name: str, button_label: str, **kwargs: Any) -> ToolResult:
+    async def _run(self, device_name: str = "", button_label: str = "", **kwargs: Any) -> ToolResult:
         res = ir_remote_engine.start_learning_mode(device_name, button_label)
         return ToolResult(
             success=True,
