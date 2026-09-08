@@ -45,7 +45,7 @@ class HolmevBrain:
         plan, result = await agent_planner.create_and_execute_plan(user_query=user_input, plan_spec=tool_plan_spec)
 
         # 4. Formulate verified friendly response based on emotion & tool execution
-        spoken_response = self._formulate_speech_response(user_input, tool_name, arguments, result, user_emotion)
+        spoken_response = self._formulate_speech_response(user_input, tool_name or "", arguments, result, user_emotion)
 
         context_engine.update_context(spoken_response, role="assistant")
 
@@ -67,7 +67,7 @@ class HolmevBrain:
             "spoken_response": spoken_response
         }
 
-    def _formulate_speech_response(self, query: str, tool_name: str, args: Dict[str, Any], result: Dict[str, Any], emotion: str = "NEUTRAL") -> str:
+    def _formulate_speech_response(self, query: str, tool_name: Optional[str], args: Dict[str, Any], result: Dict[str, Any], emotion: str = "NEUTRAL") -> str:
         if not result.get("success"):
             err = result.get("error", "Task execution failed.")
             return f"Boss, {err}"

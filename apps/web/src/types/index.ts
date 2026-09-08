@@ -47,6 +47,7 @@ export interface ThreeDObject {
   rotation: [number, number, number];
   scale: [number, number, number];
   color: string;
+  wireframe?: boolean;
 }
 
 export interface CircuitData {
