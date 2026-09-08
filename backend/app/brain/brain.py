@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 from app.context.engine import context_engine
 from app.providers.router import ai_router
 from app.tools.registry import tool_registry
