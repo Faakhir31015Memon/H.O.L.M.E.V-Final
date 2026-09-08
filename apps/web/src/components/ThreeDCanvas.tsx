@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Stage, Float } from '@react-three/drei';
 import { useHolmevStore } from '../store/useHolmevStore';
-import { Box, Plus, RefreshCw, Trash2, Move } from 'lucide-react';
+import { Box, Plus, RefreshCw, Trash2, Move, Sparkles, Image } from 'lucide-react';
 
 const MeshObject: React.FC<{ obj: any }> = ({ obj }) => {
   return (
@@ -10,12 +10,15 @@ const MeshObject: React.FC<{ obj: any }> = ({ obj }) => {
       {obj.type === "cube" && <boxGeometry args={[1.5, 1.5, 1.5]} />}
       {obj.type === "sphere" && <sphereGeometry args={[1, 32, 32]} />}
       {obj.type === "cylinder" && <cylinderGeometry args={[1, 1, 2, 32]} />}
+      {obj.type === "mechanical_arm" && <cylinderGeometry args={[0.5, 0.5, 3, 16]} />}
+      {obj.type === "hologram_model" && <coneGeometry args={[1.5, 3, 32]} />}
       <meshStandardMaterial
         color={obj.color || "#00f0ff"}
         roughness={0.2}
         metalness={0.8}
         emissive={obj.color || "#00f0ff"}
-        emissiveIntensity={0.2}
+        emissiveIntensity={0.3}
+        wireframe={obj.type === "hologram_model" || obj.wireframe}
       />
     </mesh>
   );
@@ -37,7 +40,6 @@ export const ThreeDCanvas: React.FC = () => {
         addThreeDObject(data.result.data.object);
       }
     } catch (e) {
-      // Local fallback mesh add
       addThreeDObject({
         id: `obj_${Date.now()}`,
         type: selectedType,
@@ -47,6 +49,18 @@ export const ThreeDCanvas: React.FC = () => {
         color: "#00f0ff"
       });
     }
+  };
+
+  const handleImageToHologram = () => {
+    addThreeDObject({
+      id: `holo_${Date.now()}`,
+      type: "hologram_model",
+      position: [0, 1, 0],
+      rotation: [0, Math.PI / 4, 0],
+      scale: [1.2, 1.2, 1.2],
+      color: "#00f0ff",
+      wireframe: true
+    });
   };
 
   const handleClearScene = () => {
@@ -59,10 +73,10 @@ export const ThreeDCanvas: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold font-mono text-cyan-400 text-glow flex items-center gap-2">
             <Box className="w-5 h-5 text-cyan-400" />
-            Interactive 3D Workspace Engine
+            Iron Man Style 3D Holographic Workspace
           </h2>
           <p className="text-xs text-slate-400 font-mono">
-            Three.js / React Three Fiber Real-Time Canvas
+            Hand Gesture Control & Image-to-3D Hologram Mesh Generator
           </p>
         </div>
 
@@ -75,14 +89,23 @@ export const ThreeDCanvas: React.FC = () => {
             <option value="cube">Cube Primitive</option>
             <option value="sphere">Sphere Primitive</option>
             <option value="cylinder">Cylinder Primitive</option>
+            <option value="mechanical_arm">Mechanical Arm Mesh</option>
           </select>
 
           <button
             onClick={handleAddObject}
-            className="flex items-center space-x-1.5 px-4 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/30 text-xs font-mono transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)]"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/30 text-xs font-mono transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)]"
           >
             <Plus className="w-4 h-4" />
-            <span>Add 3D Mesh</span>
+            <span>Add Mesh</span>
+          </button>
+
+          <button
+            onClick={handleImageToHologram}
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/50 hover:bg-purple-500/30 text-xs font-mono transition-all"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Image to Hologram</span>
           </button>
 
           <button
@@ -112,11 +135,20 @@ export const ThreeDCanvas: React.FC = () => {
           </group>
         </Canvas>
 
+        {/* Hand Gesture Virtual Trash Bin Overlay */}
+        <div className="absolute top-4 right-4 bg-red-500/10 border border-red-500/40 rounded-xl p-3 text-red-400 flex items-center gap-2 font-mono text-xs">
+          <Trash2 className="w-5 h-5 animate-bounce" />
+          <div>
+            <div className="font-bold">Gesture Trash Bin Zone</div>
+            <div className="text-[10px] text-red-300/80">Swipe item here to delete</div>
+          </div>
+        </div>
+
         <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur border border-slate-800 rounded-lg p-3 text-[11px] font-mono text-slate-300 pointer-events-none">
-          <div className="text-cyan-400 font-bold mb-1">3D Controls</div>
-          <div>Left Click + Drag: Rotate Camera</div>
-          <div>Right Click + Drag: Pan Camera</div>
-          <div>Scroll: Zoom Camera</div>
+          <div className="text-cyan-400 font-bold mb-1">Tony Stark Hand Gesture Controls</div>
+          <div>Pinch Hand: Grab & Move Object</div>
+          <div>Swipe Fast / Hold over Trash: Throw to Delete</div>
+          <div>Left Click + Drag: Rotate Camera view</div>
         </div>
       </div>
     </div>
