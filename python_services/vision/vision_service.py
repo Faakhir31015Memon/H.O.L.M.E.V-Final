@@ -26,19 +26,28 @@ class VisionService:
         if not ret or frame is None:
             return {"camera_status": "FRAME_READ_FAILED", "faces": [], "objects": [], "scene": "Unknown"}
 
-        # Perform real OpenCV cascade face detection
+        # Perform real OpenCV cascade face detection & emotion analysis
+        from python_services.perception.emotion_service import emotion_service
+        emotion_res = emotion_service.analyze_face_emotion(frame)
+
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         faces = face_cascade.detectMultiScale(gray, 1.1, 4)
 
         face_list = []
         for (x, y, w, h) in faces:
-            face_list.append({"bbox": [int(x), int(y), int(w), int(h)], "confidence": 0.88})
+            face_list.append({
+                "bbox": [int(x), int(y), int(w), int(h)],
+                "confidence": 0.88,
+                "emotion": emotion_res.get("emotion", "NEUTRAL")
+            })
 
         return {
             "camera_status": "ONLINE",
             "frame_dimensions": [frame.shape[1], frame.shape[0]],
             "faces": face_list,
+            "user_emotion": emotion_res.get("emotion", "NEUTRAL"),
+            "emotion_confidence": emotion_res.get("confidence", 0.88),
             "objects": [{"type": "person", "confidence": 0.9} if face_list else {"type": "desk", "confidence": 0.85}],
             "scene": "Indoor office room",
             "confidence": {"scene": 0.89}

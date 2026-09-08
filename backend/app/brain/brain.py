@@ -67,80 +67,93 @@ class HolmevBrain:
             "spoken_response": spoken_response
         }
 
+    def _detect_language(self, text: str) -> str:
+        """Detects primary language: 'roman_urdu', 'english', 'hindi', 'urdu'."""
+        text_lower = text.lower()
+        roman_urdu_words = ["hai", "karo", "bhej", "dikha", "kaise", "kya", "mera", "humaray", "band", "chala", "kaam", "jao", "batao", "kaheen"]
+        if any(w in text_lower for w in roman_urdu_words):
+            return "roman_urdu"
+        if any(ord(char) > 0x0600 and ord(char) < 0x06FF for char in text):
+            return "urdu"
+        return "english"
+
     def _formulate_speech_response(self, query: str, tool_name: Optional[str], args: Dict[str, Any], result: Dict[str, Any], emotion: str = "NEUTRAL") -> str:
+        lang = self._detect_language(query)
+
+        # Emotion prefix styling
+        prefix = ""
+        if emotion == "STRESSED":
+            prefix = "Fikr mat karein Boss, " if lang == "roman_urdu" else "Don't stress, Boss, "
+        elif emotion == "HAPPY":
+            prefix = "Great mood, Boss! " if lang == "english" else "Zabardast Boss! "
+        elif emotion == "TIRED":
+            prefix = "Aap thakay huaye lag rahe hain. " if lang == "roman_urdu" else "You seem tired. "
+
         if not result.get("success"):
             err = result.get("error", "Task execution failed.")
-            return f"Boss, {err}"
+            return f"{prefix}Boss, {err}"
 
         data = result.get("data", {})
 
         if tool_name == "home.cctv.show":
             if data.get("action_required") == "DISAMBIGUATION_NEEDED":
-                return data.get("question", "Konsa wala CCTV camera dikhaoon?")
-            return data.get("message", "CCTV feed display kar di gayi hai.")
+                return data.get("question", "Konsa wala CCTV camera display karoon? Bedroom ya Hallway?")
+            return f"{prefix}" + data.get("message", "CCTV feed display kar di gayi hai.")
 
         if tool_name == "home.ir.learn":
-            return data.get("message", "IR receiver ready hai. Physical remote ka button press karein.")
+            return f"{prefix}" + data.get("message", "IR receiver ready hai. Physical remote ka button press karein.")
 
         if tool_name == "navigation.get_route":
             if data.get("spoken_response"):
-                return data["spoken_response"]
-            return f"{args.get('destination', 'Destination')} ka route navigation layout display kar diya hai."
+                return f"{prefix}" + data["spoken_response"]
+            return f"{prefix}{args.get('destination', 'Destination')} ka 3D holographic route layout display kar diya gaya hai."
 
         if tool_name == "mobile.whatsapp.send":
-            return data.get("spoken_response", "WhatsApp message send kar diya gaya hai.")
+            return f"{prefix}" + data.get("spoken_response", "WhatsApp message send kar diya gaya hai.")
 
         if tool_name == "mobile.phone.call":
-            return data.get("spoken_response", "Phone call initiate ho rahi hai.")
+            return f"{prefix}" + data.get("spoken_response", "Phone call initiate ho rahi hai.")
 
         if tool_name == "mobile.email.send":
-            return data.get("spoken_response", "Email bhej di gayi hai.")
+            return f"{prefix}" + data.get("spoken_response", "Email bhej di gayi hai.")
 
         if tool_name == "mobile.image.display":
-            return data.get("spoken_response", "Mobile photo screen par display kar di gayi hai.")
+            return f"{prefix}" + data.get("spoken_response", "Mobile photo screen par display kar di gayi hai.")
 
         if tool_name == "desktop.system_control":
-            return f"System {args.get('action', 'action')} schedule ho gaya hai, Boss."
+            action_str = args.get('action', 'action')
+            if lang == "english":
+                return f"{prefix}System {action_str} scheduled, Boss."
+            return f"{prefix}System {action_str} schedule kar diya gaya hai, Boss."
 
         if tool_name == "desktop.open_application":
-            return f"{args.get('application', 'Application').capitalize()} khol diya gaya hai, Boss."
+            app_name = args.get('application', 'Application').capitalize()
+            return f"{prefix}{app_name} open kar diya gaya hai, Boss."
 
         if tool_name == "browser.open":
-            return f"Browser launch karke {args.get('url')} open kar diya gaya hai."
-
-        if tool_name == "desktop.create_folder":
-            return f"Folder {data.get('path')} successfully create ho gaya hai."
-
-        if tool_name == "desktop.type_text":
-            return f"Text successfully type kar diya gaya hai."
+            return f"{prefix}Browser launch karke {args.get('url')} open kar diya gaya hai."
 
         if tool_name == "home.device.set_power":
             dev_name = data.get("device", "Device")
             power_str = "ON" if data.get("state", {}).get("power") else "OFF"
             speed_val = data.get("state", {}).get("speed")
             speed_str = f" speed {speed_val} par" if speed_val is not None else ""
-            return f"{dev_name} {power_str}{speed_str} set kar diya gaya hai, Boss."
+            return f"{prefix}{dev_name} {power_str}{speed_str} set kar diya gaya hai, Boss."
 
         if tool_name == "threed.create_object":
-            return f"3D workspace mein {args.get('object_type', 'object')} primitive add ho gaya hai."
-
-        if tool_name == "threed.transform_object":
-            return "3D object transform update kar diya gaya hai."
+            return f"{prefix}3D workspace mein {args.get('object_type', 'object')} add ho gaya hai."
 
         if tool_name == "circuit.create":
             sim = data.get("simulation", {})
             curr = sim.get("current_ma", 0)
-            return f"LED circuit construct ho gaya hai. Current draw {curr} mA hai, circuit working condition mein hai."
-
-        if tool_name == "memory.store":
-            return f"Yeh baat memory mein store kar li gayi hai, Boss."
+            return f"{prefix}Circuit construct ho gaya hai. Current draw {curr} mA hai, circuit ready hai."
 
         if tool_name == "web.search":
             snippets = data.get("snippets", [])
             if snippets:
-                return f"Search result: {snippets[0]}"
-            return f"Web search complete ho gaya hai."
+                return f"{prefix}Mujhe yeh information mili: {snippets[0]}"
+            return f"{prefix}Web search complete ho gaya hai."
 
-        return "Task complete ho gaya hai, Boss."
+        return f"{prefix}Task successfully complete ho gaya hai, Boss."
 
 holmev_brain = HolmevBrain()
