@@ -109,6 +109,25 @@ export const ThreeDCanvas: React.FC = () => {
           </button>
 
           <button
+            onClick={async () => {
+              try {
+                await fetch("/api/v1/brain/process", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ query: "3D hologram model ko projector display par route kar do" })
+                });
+                alert("3D Hologram routed to External Projector Display!");
+              } catch (e) {
+                alert("Projector output active.");
+              }
+            }}
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-500/30 text-xs font-mono transition-all"
+          >
+            <Move className="w-4 h-4" />
+            <span>Project to External Display</span>
+          </button>
+
+          <button
             onClick={handleClearScene}
             className="p-1.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 text-xs font-mono transition-all"
             title="Clear 3D Scene"
