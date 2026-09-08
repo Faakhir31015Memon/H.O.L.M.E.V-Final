@@ -14,7 +14,7 @@ class CCTVCameraManager:
             "office": {"id": "cam_05", "name": "Office Room Camera", "status": "ONLINE", "stream_url": "/api/cctv/stream/office"}
         }
 
-    def process_camera_request(self, camera_names: List[str] = None, raw_query: str = "") -> Dict[str, Any]:
+    def process_camera_request(self, camera_names: Optional[List[str]] = None, raw_query: str = "") -> Dict[str, Any]:
         """
         Processes camera display requests.
         If camera_names is empty or ambiguous, prompts user for selection.
