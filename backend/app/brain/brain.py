@@ -9,10 +9,10 @@ from app.events.bus import event_bus, SystemEvent
 logger = logging.getLogger("holmev.brain")
 
 class HolmevBrain:
-    async def process_user_request(self, user_input: str, session_id: str = "default_session") -> Dict[str, Any]:
+    async def process_user_request(self, user_input: str, session_id: str = "default_session", user_emotion: str = "NEUTRAL") -> Dict[str, Any]:
         """
         Master Intelligence Pipeline:
-        User Input -> Context Engine -> AI Provider Router -> Planner -> Permission Check -> Tool Execution -> Response
+        User Input -> Context Engine -> AI Provider Router -> Planner -> Permission Check -> Tool Execution -> Spoken Response
         """
         # 1. Update Context
         context_engine.update_context(user_input, role="user")
@@ -23,7 +23,7 @@ class HolmevBrain:
             event_type="AI_THINKING",
             source="brain",
             session_id=session_id,
-            payload={"input": user_input}
+            payload={"input": user_input, "emotion": user_emotion}
         ))
 
         # 2. Intent Understanding & Structured Tool Mapping
@@ -44,8 +44,8 @@ class HolmevBrain:
         # 3. Plan & Execute Tool via Planner & Permission Engine
         plan, result = await agent_planner.create_and_execute_plan(user_query=user_input, plan_spec=tool_plan_spec)
 
-        # 4. Formulate verified response
-        spoken_response = self._formulate_speech_response(user_input, tool_name, arguments, result)
+        # 4. Formulate verified friendly response based on emotion & tool execution
+        spoken_response = self._formulate_speech_response(user_input, tool_name, arguments, result, user_emotion)
 
         context_engine.update_context(spoken_response, role="assistant")
 
@@ -67,12 +67,40 @@ class HolmevBrain:
             "spoken_response": spoken_response
         }
 
-    def _formulate_speech_response(self, query: str, tool_name: str, args: Dict[str, Any], result: Dict[str, Any]) -> str:
+    def _formulate_speech_response(self, query: str, tool_name: str, args: Dict[str, Any], result: Dict[str, Any], emotion: str = "NEUTRAL") -> str:
         if not result.get("success"):
             err = result.get("error", "Task execution failed.")
             return f"Boss, {err}"
 
         data = result.get("data", {})
+
+        if tool_name == "home.cctv.show":
+            if data.get("action_required") == "DISAMBIGUATION_NEEDED":
+                return data.get("question", "Konsa wala CCTV camera dikhaoon?")
+            return data.get("message", "CCTV feed display kar di gayi hai.")
+
+        if tool_name == "home.ir.learn":
+            return data.get("message", "IR receiver ready hai. Physical remote ka button press karein.")
+
+        if tool_name == "navigation.get_route":
+            if data.get("spoken_response"):
+                return data["spoken_response"]
+            return f"{args.get('destination', 'Destination')} ka route navigation layout display kar diya hai."
+
+        if tool_name == "mobile.whatsapp.send":
+            return data.get("spoken_response", "WhatsApp message send kar diya gaya hai.")
+
+        if tool_name == "mobile.phone.call":
+            return data.get("spoken_response", "Phone call initiate ho rahi hai.")
+
+        if tool_name == "mobile.email.send":
+            return data.get("spoken_response", "Email bhej di gayi hai.")
+
+        if tool_name == "mobile.image.display":
+            return data.get("spoken_response", "Mobile photo screen par display kar di gayi hai.")
+
+        if tool_name == "desktop.system_control":
+            return f"System {args.get('action', 'action')} schedule ho gaya hai, Boss."
 
         if tool_name == "desktop.open_application":
             return f"{args.get('application', 'Application').capitalize()} khol diya gaya hai, Boss."
