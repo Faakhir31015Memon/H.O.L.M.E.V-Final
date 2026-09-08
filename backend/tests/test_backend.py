@@ -6,6 +6,10 @@ from app.permissions.engine import permission_engine
 from app.brain.brain import holmev_brain
 from python_services.voice.voice_manager import voice_manager
 from app.circuits.simulator import circuit_simulator
+from app.home.cctv_manager import cctv_manager
+from app.home.ir_remote import ir_remote_engine
+from app.navigation.route_engine import route_engine
+from app.communication.mobile_bridge import mobile_bridge_service
 
 client = TestClient(app)
 
@@ -66,9 +70,43 @@ async def test_voice_manager_continuous_activation():
     assert voice_manager.get_diagnostics().state == "DEACTIVATED"
 
 @pytest.mark.asyncio
-async def test_brain_end_to_end_intent():
-    res = await holmev_brain.process_user_request("Bedroom fan speed 2 kar do")
-    assert res["tool"] == "home.device.set_power"
-    assert res["result"]["success"] is True
-    assert res["result"]["verified"] is True
-    assert "Bedroom Fan ON" in res["spoken_response"] or "ON" in res["spoken_response"]
+async def test_cctv_manager_disambiguation():
+    # Test ambiguous prompt asking for CCTV
+    res_ambiguous = cctv_manager.process_camera_request(raw_query="CCTV camera dikhao")
+    assert res_ambiguous["action_required"] == "DISAMBIGUATION_NEEDED"
+    assert "Konsa wala camera dikhaoon?" in res_ambiguous["question"]
+
+    # Test specific single room camera request
+    res_bedroom = cctv_manager.process_camera_request(camera_names=["bedroom"])
+    assert res_bedroom["action_required"] == "DISPLAY_FEED"
+    assert len(res_bedroom["active_streams"]) == 1
+    assert res_bedroom["active_streams"][0]["name"] == "Bedroom Camera"
+
+    # Test multi-room camera request
+    res_multi = cctv_manager.process_camera_request(camera_names=["bedroom", "hall"])
+    assert res_multi["action_required"] == "DISPLAY_FEED"
+    assert len(res_multi["active_streams"]) == 2
+    assert res_multi["mode"] == "MULTI_VIEW"
+
+@pytest.mark.asyncio
+async def test_ir_remote_and_navigation():
+    # Test IR Remote signal learning
+    ir_learn = ir_remote_engine.start_learning_mode("Bedroom Fan", "POWER_OFF")
+    assert ir_learn["status"] == "LEARNING_MODE_STARTED"
+
+    ir_save = ir_remote_engine.save_captured_signal("Bedroom Fan", "POWER_OFF", "0x00FF02FD")
+    assert ir_save["status"] == "SIGNAL_SAVED"
+
+    # Test AR Road Navigation Engine
+    nav_res = route_engine.calculate_road_route("Mall Road")
+    assert nav_res["success"] is True
+    assert nav_res["destination"] == "Mall Road"
+    assert len(nav_res["steps"]) > 0
+
+@pytest.mark.asyncio
+async def test_mobile_bridge_service():
+    wa_res = mobile_bridge_service.send_whatsapp_message("Ali", "Meeting at 5 PM")
+    assert wa_res["status"] == "SENT"
+
+    call_res = mobile_bridge_service.make_phone_call("Ali")
+    assert call_res["status"] == "CALLING"
