@@ -1,189 +1,297 @@
+"""The Universal Intelligence Router.
+
+Picks which model answers a request, explains why, and keeps a fallback chain so
+a missing or crashed model degrades into an honest error instead of a silent lie.
+"""
+
+from __future__ import annotations
+
 import json
 import logging
-from typing import Dict, Any, List, Optional
-import httpx
+import re
+from dataclasses import dataclass, field, replace
+from typing import Any
+
 from app.config.settings import settings
+from app.engines.types import Complexity, PrivacyLevel, RoutingDecision
+from app.providers.base import (
+    ChatMessage,
+    GenerationRequest,
+    GenerationResult,
+    ModelInfo,
+    RunControl,
+)
+from app.providers.registry import registry
 
-logger = logging.getLogger("holmev.providers")
+logger = logging.getLogger("holmev.providers.router")
 
-class AIProviderRouter:
-    def __init__(self):
-        self.primary_provider = settings.DEFAULT_AI_PROVIDER
-        self.fallback_provider = settings.AI_FALLBACK_PROVIDER
+_JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+LOCAL_PROVIDERS = ("ollama", "mock")
 
-    async def generate_tool_plan(self, user_input: str, available_tools: List[Dict[str, str]], context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        NLU & Structured Tool Router.
-        Maps natural language to structured tool calls without hardcoded prompt matching!
-        """
-        # Try primary provider (Gemini or OpenAI) if API key available
-        if settings.GEMINI_API_KEY and self.primary_provider == "gemini":
+
+@dataclass
+class RouteRequest:
+    required_capabilities: set[str] = field(default_factory=set)
+    complexity: Complexity = "simple"
+    est_input_tokens: int = 200
+    privacy_level: PrivacyLevel = "local_only"
+    needs_json: bool = False
+    preferred_model: str | None = None
+    task_type: str = "chat"
+
+
+@dataclass
+class ModelRun:
+    decision: RoutingDecision
+    result: GenerationResult
+    attempts: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return self.result.ok
+
+
+class NoModelAvailable(RuntimeError):
+    """Raised when nothing on this device can serve the request."""
+
+    def __init__(self, decision: RoutingDecision) -> None:
+        super().__init__(decision.reason)
+        self.decision = decision
+
+
+class IntelligenceRouter:
+    """Deterministic scoring: same inputs produce the same choice, always explainable."""
+
+    def _candidate_pool(self, req: RouteRequest) -> list[ModelInfo]:
+        pool = registry.models()
+        if req.privacy_level == "local_only":
+            pool = [model for model in pool if model.provider in LOCAL_PROVIDERS]
+        return pool
+
+    def _capability_fit(self, model: ModelInfo, req: RouteRequest) -> tuple[float, str]:
+        if not req.required_capabilities:
+            return 0.5, "no specific capability required"
+        caps = set(model.capabilities)
+        missing = {cap for cap in req.required_capabilities if cap not in caps}
+        if not missing:
+            return 1.0, "all required capabilities present"
+        covered = len(req.required_capabilities) - len(missing)
+        return covered / len(req.required_capabilities) * 0.5, f"missing {'/'.join(sorted(missing))}"
+
+    @staticmethod
+    def _context_fit(model: ModelInfo, req: RouteRequest) -> tuple[float, str]:
+        window = model.context_window or 4096
+        needed = req.est_input_tokens + 1024
+        if needed <= window:
+            return 1.0, f"window {window} covers {needed} tokens"
+        return max(0.0, window / needed), f"window {window} short of {needed} tokens"
+
+    @staticmethod
+    def _speed_fit(model: ModelInfo) -> tuple[float, str]:
+        lowered = model.name.lower()
+        if model.provider == "mock":
+            return 1.0, "mock adapter, instant"
+        if model.provider == "ollama":
+            if any(tag in lowered for tag in (":3b", ":1.5b", ":0.5b", "qwen2.5:3b")):
+                return 0.9, "small local model, low latency"
+            return 0.6, "larger local model, slower first token"
+        return 0.8, "remote provider; latency not measurable from this device"
+
+    @staticmethod
+    def _preference_fit(model: ModelInfo, req: RouteRequest) -> tuple[float, str]:
+        if req.preferred_model and model.name == req.preferred_model:
+            return 1.0, "matches the model you selected"
+        task_model = {
+            "coding": settings.OLLAMA_CODER_MODEL,
+            "research": settings.OLLAMA_REASONING_MODEL,
+            "document": settings.OLLAMA_REASONING_MODEL,
+        }.get(req.task_type)
+        if task_model and model.name == task_model:
+            return 0.9, f"recommended for {req.task_type} tasks"
+        if model.name == settings.OLLAMA_CHAT_MODEL:
+            return 0.7, "configured default chat model"
+        if model.provider == "mock":
+            return 0.2, "mock adapter is a test fixture, not a preference"
+        return 0.4, "no preference signal"
+
+    @staticmethod
+    def _cost_fit(model: ModelInfo, req: RouteRequest) -> tuple[float, float]:
+        """Returns (score, estimated_usd). Fill the price settings with real numbers."""
+
+        if model.provider in LOCAL_PROVIDERS:
+            return 1.0, 0.0
+        cost = (
+            req.est_input_tokens / 1000.0 * settings.EXTERNAL_COST_PER_1K_INPUT_USD
+            + 400 / 1000.0 * settings.EXTERNAL_COST_PER_1K_OUTPUT_USD
+        )
+        return max(0.0, 1.0 - cost), cost
+
+    @staticmethod
+    def _privacy_fit(model: ModelInfo, req: RouteRequest) -> tuple[float, str]:
+        is_local = model.provider in LOCAL_PROVIDERS
+        if req.privacy_level == "local_only":
+            return (1.0, "stays on this device") if is_local else (0.0, "blocked by local_only privacy rule")
+        if is_local:
+            return 1.0, "stays on this device"
+        return 0.4, "data would leave this device"
+
+    def score_models(self, req: RouteRequest) -> list[tuple[ModelInfo, float, dict[str, float], list[str]]]:
+        scored: list[tuple[ModelInfo, float, dict[str, float], list[str]]] = []
+        for model in self._candidate_pool(req):
+            cap, cap_note = self._capability_fit(model, req)
+            ctx, ctx_note = self._context_fit(model, req)
+            speed, speed_note = self._speed_fit(model)
+            pref, pref_note = self._preference_fit(model, req)
+            cost, _ = self._cost_fit(model, req)
+            privacy, privacy_note = self._privacy_fit(model, req)
+            parts = {
+                "capability": cap,
+                "context": ctx,
+                "speed": speed,
+                "preference": pref,
+                "cost": cost,
+                "privacy": privacy,
+            }
+            total = (
+                settings.W_CAPABILITY * cap
+                + settings.W_CONTEXT * ctx
+                + settings.W_SPEED * speed
+                + settings.W_PREFERENCE * pref
+                + settings.W_PRIVACY * privacy
+                - settings.W_COST * (1.0 - cost)
+            )
+            notes = [
+                f"capability {cap:.2f} - {cap_note}",
+                f"context {ctx:.2f} - {ctx_note}",
+                f"speed {speed:.2f} - {speed_note}",
+                f"preference {pref:.2f} - {pref_note}",
+                f"privacy {privacy:.2f} - {privacy_note}",
+            ]
+            scored.append((model, round(total, 4), parts, notes))
+        scored.sort(key=lambda item: (-item[1], item[0].provider, item[0].name))
+        return scored
+
+    def route(self, req: RouteRequest) -> RoutingDecision:
+        scored = self.score_models(req)
+        privacy_ok = [item for item in scored if item[2]["privacy"] > 0.0]
+        usable = [item for item in privacy_ok if item[2]["capability"] >= 0.5]
+
+        if not usable:
+            return RoutingDecision(
+                model="",
+                provider="none",
+                reason=(
+                    f"{self._no_model_reason(req)} Setup: "
+                    f"{registry.missing_model_hint('ollama', settings.OLLAMA_CHAT_MODEL)}"
+                ),
+                alternatives=[model.key for model, _, _, _ in scored[:5]],
+                privacy_level=req.privacy_level,
+                degraded=True,
+            )
+
+        top_model, top_score, parts, notes = usable[0]
+        _, cost_usd = self._cost_fit(top_model, req)
+        # Weaker-but-usable models stay in the chain so a crashed specialist
+        # degrades into a general answer instead of ending the run.
+        chain = [
+            (model.provider, model.name)
+            for model, _, _, _ in privacy_ok
+            if (model.provider, model.name) != (top_model.provider, top_model.name)
+        ][:3]
+        return RoutingDecision(
+            model=top_model.name,
+            provider=top_model.provider,
+            reason=(
+                f"{top_model.name} scored {top_score} of {len(usable)} capable model(s) - {notes[0]}; {notes[3]}. "
+                f"{len(chain)} fallback(s) queued."
+            ),
+            scores=parts,
+            alternatives=[model.key for model, _, _, _ in privacy_ok[1:6]],
+            fallback_chain=chain,
+            privacy_level=req.privacy_level,
+            data_leaves_device=top_model.provider not in LOCAL_PROVIDERS,
+            estimated_cost_usd=round(cost_usd, 6),
+            degraded=top_model.provider == "mock",
+        )
+
+    @staticmethod
+    def _no_model_reason(req: RouteRequest) -> str:
+        needed = "/".join(sorted(req.required_capabilities)) or "chat"
+        return (
+            f"No model on this device can serve a '{needed}' request right now. "
+            "Start Ollama (`ollama serve`) and pull a model, or add an API key and set "
+            "BRAIN_ALLOW_EXTERNAL=true with PRIVACY_LEVEL=allow_external_with_consent."
+        )
+
+    async def run(
+        self,
+        req: RouteRequest,
+        messages: list[ChatMessage],
+        system: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.2,
+        control: RunControl | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ModelRun:
+        decision = self.route(req)
+        if not decision.model:
+            raise NoModelAvailable(decision)
+
+        attempts: list[str] = []
+        chain = [(decision.provider, decision.model), *decision.fallback_chain]
+        last_result: GenerationResult | None = None
+
+        for provider, model in chain:
+            adapter = registry.adapter(provider)
+            if adapter is None:
+                attempts.append(f"{provider}:{model} (no adapter)")
+                continue
+            attempts.append(f"{provider}:{model}")
+            request = GenerationRequest(
+                model=model,
+                messages=messages,
+                system=system,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format="json" if req.needs_json else "text",
+                timeout_s=settings.OLLAMA_TIMEOUT_S if provider == "ollama" else 60.0,
+                num_ctx=settings.OLLAMA_NUM_CTX if provider == "ollama" else None,
+                control=control or RunControl(),
+                metadata=metadata or {},
+            )
             try:
-                return await self._call_gemini_api(user_input, available_tools, context)
-            except Exception as e:
-                logger.warning(f"Primary AI provider Gemini failed: {e}. Switching to fallback.")
+                result = await adapter.generate(request)
+            except Exception as exc:
+                logger.warning("model %s:%s raised %s", provider, model, exc)
+                last_result = GenerationResult(ok=False, model=model, provider=provider, error=str(exc))
+                continue
+            if result.ok and result.text.strip():
+                return ModelRun(decision=decision, result=result, attempts=attempts)
+            last_result = result
+            logger.warning("model %s:%s failed (%s); trying next in chain", provider, model, result.error)
 
-        if settings.OPENAI_API_KEY and (self.fallback_provider == "openai" or settings.OPENAI_API_KEY):
-            try:
-                return await self._call_openai_api(user_input, available_tools, context)
-            except Exception as e:
-                logger.warning(f"Fallback AI provider OpenAI failed: {e}. Switching to local heuristic engine.")
+        assert last_result is not None
+        return ModelRun(decision=decision, result=last_result, attempts=attempts)
 
-        # Local Intelligence & Reasoning Router fallback
-        return self._local_intent_router(user_input, available_tools, context)
+    async def run_json(
+        self,
+        req: RouteRequest,
+        messages: list[ChatMessage],
+        system: str | None = None,
+        **kwargs: Any,
+    ) -> tuple[dict[str, Any] | None, ModelRun | None, str | None]:
+        """Ask for JSON, parse it defensively, and return (payload, run, error)."""
 
-    def _local_intent_router(self, user_input: str, available_tools: List[Dict[str, str]], context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Structured Semantic Local Router (Zero Hardcoded Strict Exact-String Matching).
-        Resolves synonyms, intent categories, room entities, and parameters.
-        """
-        text = user_input.lower().strip()
-        
-        # Desktop Application & Web Launch Intent
-        if any(w in text for w in ["notepad", "chrome", "browser", "youtube", "calculator", "calc", "folder", "directory", "open", "launch", "start", "kholo", "chalao", "banao", "नोटपैड", "क्रोम", "खोलो", "चलाओ", "बनाओ", "कैलकुलेटर"]):
-            if any(w in text for w in ["youtube", "यूट्यूब"]):
-                return {
-                    "tool": "browser.open",
-                    "arguments": {"url": "https://www.youtube.com"},
-                    "thought": "User requested opening YouTube."
-                }
-            if any(w in text for w in ["chrome", "browser", "google", "क्रोम", "ब्राउजर"]):
-                return {
-                    "tool": "browser.open",
-                    "arguments": {"url": "https://www.google.com"},
-                    "thought": "User requested opening browser/chrome."
-                }
-            if any(w in text for w in ["notepad", "नोटपैड"]):
-                return {
-                    "tool": "desktop.open_application",
-                    "arguments": {"application": "notepad"},
-                    "thought": "User requested opening Notepad."
-                }
-            if any(w in text for w in ["calculator", "calc", "कैलकुलेटर"]):
-                return {
-                    "tool": "desktop.open_application",
-                    "arguments": {"application": "calculator"},
-                    "thought": "User requested opening Calculator."
-                }
-            if any(w in text for w in ["folder", "directory", "फ़ोल्डर", "फोल्डर"]):
-                parts = text.split()
-                name = "HOLMEV_Test"
-                for i, p in enumerate(parts):
-                    if p in ["folder", "directory", "फ़ोल्डर", "फोल्डर"]:
-                        if i + 1 < len(parts):
-                            name = parts[i+1]
-                        elif i - 1 >= 0:
-                            name = parts[i-1]
-                return {
-                    "tool": "desktop.create_folder",
-                    "arguments": {"folder_path": f"./{name}"},
-                    "thought": "User requested creating a directory."
-                }
-            # Fallback app launch for single keywords e.g. "cmd", "paint"
-            words = [w for w in text.split() if w not in ["open", "launch", "start", "kholo", "chalao", "banao", "karo", "please"]]
-            if words:
-                return {
-                    "tool": "desktop.open_application",
-                    "arguments": {"application": words[0]},
-                    "thought": f"User requested opening {words[0]}."
-                }
+        json_req = replace(req, needs_json=True)
+        run = await self.run(json_req, messages, system, **kwargs)
+        cleaned = _JSON_FENCE.sub(r"\1", run.result.text).strip()
+        try:
+            payload = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            return None, run, f"model returned non-JSON output: {exc}"
+        if not isinstance(payload, dict):
+            return None, run, "model returned JSON that is not an object"
+        return payload, run, None
 
-        # Text Typing Intent
-        if any(w in text for w in ["type", "lilkho", "likho", "write"]):
-            # Extract content after 'type' or 'likho'
-            target_text = user_input
-            for kw in ["type karo", "type", "likho", "write"]:
-                if kw in user_input.lower():
-                    target_text = user_input.lower().split(kw)[-1].strip()
-                    break
-            return {
-                "tool": "desktop.type_text",
-                "arguments": {"text": target_text or "Hello World"},
-                "thought": "User requested typing text."
-            }
 
-        # Smart Home Device Control Intent (Zero-Hardcoded Exact Match - Room + Device Type + Power/Speed)
-        if any(w in text for w in ["fan", "light", "pankha", "bijli", "ac", "tv"]):
-            room = "Bedroom" if any(w in text for w in ["bedroom", "kamra", "room"]) else ("Hall" if "hall" in text else "Bedroom")
-            device_type = "fan" if any(w in text for w in ["fan", "pankha"]) else ("light" if any(w in text for w in ["light", "batti"]) else "ac")
-            power = not any(w in text for w in ["off", "band", "close", "turn off"])
-            
-            speed = None
-            for num in [1, 2, 3, 4, 5]:
-                if str(num) in text:
-                    speed = num
-                    break
-
-            return {
-                "tool": "home.device.set_power",
-                "arguments": {"room": room, "device_type": device_type, "power": power, "speed": speed},
-                "thought": f"Smart home intent: room={room}, device={device_type}, power={power}, speed={speed}"
-            }
-
-        # 3D Workspace Intent
-        if any(w in text for w in ["cube", "sphere", "3d", "mesh", "shape", "primitive"]):
-            if any(w in text for w in ["move", "left", "right", "size", "double"]):
-                pos_delta = [-2.0, 0.0, 0.0] if "left" in text else ([2.0, 0.0, 0.0] if "right" in text else [0.0, 0.0, 0.0])
-                scale_delta = [2.0, 2.0, 2.0] if any(w in text for w in ["double", "size", "bada"]) else None
-                return {
-                    "tool": "threed.transform_object",
-                    "arguments": {"position": pos_delta, "scale": scale_delta},
-                    "thought": "User requested transforming 3D object."
-                }
-            return {
-                "tool": "threed.create_object",
-                "arguments": {"object_type": "cube", "position": [0, 0, 0], "color": "#00f0ff"},
-                "thought": "User requested 3D primitive creation."
-            }
-
-        # Circuit Simulator Intent
-        if any(w in text for w in ["circuit", "led", "resistor", "ohm", "voltage", "current"]):
-            return {
-                "tool": "circuit.create",
-                "arguments": {"circuit_type": "led"},
-                "thought": "User requested electrical circuit creation and simulation."
-            }
-
-        # Memory Intent
-        if any(w in text for w in ["yaad", "remember", "memory", "store", "save"]):
-            return {
-                "tool": "memory.store",
-                "arguments": {"category": "preference", "key": "user_fact", "value": user_input},
-                "thought": "User requested storing memory."
-            }
-
-        # Live Web Search fallback
-        return {
-            "tool": "web.search",
-            "arguments": {"query": user_input},
-            "thought": "General query routed to web search."
-        }
-
-    async def _call_gemini_api(self, user_input: str, tools: List[Dict[str, str]], context: Dict[str, Any]) -> Dict[str, Any]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
-        prompt = f"Available tools: {json.dumps(tools)}. Context: {json.dumps(context)}. User request: {user_input}. Return ONLY valid JSON format: {{\"tool\": \"tool_name\", \"arguments\": {{...}}, \"thought\": \"...\"}}"
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json={"contents": [{"parts": [{"text": prompt}]}]})
-            if resp.status_code == 200:
-                data = resp.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                # Clean JSON block backticks if present
-                clean_text = text.replace("```json", "").replace("```", "").strip()
-                return json.loads(clean_text)
-            raise RuntimeError(f"Gemini API returned status {resp.status_code}")
-
-    async def _call_openai_api(self, user_input: str, tools: List[Dict[str, str]], context: Dict[str, Any]) -> Dict[str, Any]:
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
-        prompt = f"Available tools: {json.dumps(tools)}. User request: {user_input}. Return JSON: {{\"tool\": \"tool_name\", \"arguments\": {{...}}, \"thought\": \"...\"}}"
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, headers=headers, json={
-                "model": "gpt-4o-mini",
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"}
-            })
-            if resp.status_code == 200:
-                return json.loads(resp.json()["choices"][0]["message"]["content"])
-            raise RuntimeError(f"OpenAI API status {resp.status_code}")
-
-ai_router = AIProviderRouter()
+ai_router = IntelligenceRouter()

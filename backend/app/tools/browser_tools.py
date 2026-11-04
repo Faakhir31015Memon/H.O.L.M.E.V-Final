@@ -1,9 +1,12 @@
-from typing import Any
 import os
 import subprocess
 import webbrowser
+from typing import Any
+
 from pydantic import BaseModel, Field
+
 from app.tools.base import BaseTool, ToolResult
+
 
 class OpenBrowserInput(BaseModel):
     url: str = Field(description="URL to open, e.g. https://www.google.com or https://www.youtube.com")

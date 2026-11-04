@@ -1,15 +1,17 @@
-import time
 import abc
-from typing import Type, Dict, Any, Optional
+import time
+from typing import Any
+
 from pydantic import BaseModel, Field
+
 
 class ToolResult(BaseModel):
     success: bool
     verified: bool = False
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    data: dict[str, Any] | None = None
+    error: str | None = None
     duration_ms: int = 0
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
 
 class BaseTool(abc.ABC):
     name: str
@@ -17,10 +19,10 @@ class BaseTool(abc.ABC):
     version: str = "1.0.0"
     category: str = "general"
     permission_level: int = 1  # 0: Read-only, 1: Low-risk local, 2: Device/Comm, 3: Sensitive, 4: High risk
-    input_schema: Type[BaseModel]
-    output_schema: Type[BaseModel] = ToolResult
+    input_schema: type[BaseModel]
+    output_schema: type[BaseModel] = ToolResult
     timeout: int = 30
-    retry_policy: Dict[str, Any] = {"max_retries": 1, "backoff_ms": 500}
+    retry_policy: dict[str, Any] = {"max_retries": 1, "backoff_ms": 500}
     supports_cancellation: bool = True
 
     @abc.abstractmethod
@@ -49,7 +51,7 @@ class BaseTool(abc.ABC):
     async def health_check(self) -> bool:
         return True
 
-    def audit_metadata(self) -> Dict[str, Any]:
+    def audit_metadata(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "category": self.category,

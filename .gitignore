@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# Local secrets and local state — never commit these
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Runtime databases and generated artifacts
+*.db
+*.sqlite3
+backend/holmev.db
+backend/workspace/
+backend/.holmev_trash/
+
+# Node
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

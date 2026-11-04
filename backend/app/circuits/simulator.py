@@ -1,5 +1,6 @@
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
+
 
 class ComponentType:
     BATTERY = "battery"
@@ -10,10 +11,10 @@ class ComponentType:
 
 class CircuitSimulator:
     def __init__(self):
-        self.components: Dict[str, Dict[str, Any]] = {}
-        self.connections: List[Dict[str, Any]] = []
+        self.components: dict[str, dict[str, Any]] = {}
+        self.connections: list[dict[str, Any]] = []
 
-    def create_led_circuit(self, battery_voltage: float = 9.0, resistance: float = 330.0) -> Dict[str, Any]:
+    def create_led_circuit(self, battery_voltage: float = 9.0, resistance: float = 330.0) -> dict[str, Any]:
         """Builds a real LED circuit graph: Battery -> Resistor -> LED -> Battery ground."""
         self.components.clear()
         self.connections.clear()
@@ -49,17 +50,19 @@ class CircuitSimulator:
             "simulation": simulation_result
         }
 
-    def simulate(self) -> Dict[str, Any]:
+    def simulate(self) -> dict[str, Any]:
         """Calculates exact physics & electrical metrics using Ohm's Law (V = I * R)."""
         if not self.components or not self.connections:
-            return {"status": "OPEN_CIRCUIT", "current_ma": 0.0, "led_illuminated": False, "error": "No circuit components"}
+            return {"status": "OPEN_CIRCUIT", "current_ma": 0.0, "led_illuminated": False,
+                    "error": "No circuit components"}
 
         battery = next((c for c in self.components.values() if c["type"] == ComponentType.BATTERY), None)
         resistor = next((c for c in self.components.values() if c["type"] == ComponentType.RESISTOR), None)
         led = next((c for c in self.components.values() if c["type"] == ComponentType.LED), None)
 
         if not battery:
-            return {"status": "NO_POWER_SOURCE", "current_ma": 0.0, "led_illuminated": False, "error": "Missing battery source"}
+            return {"status": "NO_POWER_SOURCE", "current_ma": 0.0, "led_illuminated": False,
+                    "error": "Missing battery source"}
 
         total_r = resistor["resistance"] if resistor else 0.001
         v_source = battery["voltage"]

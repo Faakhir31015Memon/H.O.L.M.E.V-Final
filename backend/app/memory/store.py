@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any
+
 
 class MemoryStore:
     def __init__(self):
-        self.memories: List[Dict[str, Any]] = [
+        self.memories: list[dict[str, Any]] = [
             {
                 "id": "mem_pref_room",
                 "category": "preference",
@@ -14,7 +15,7 @@ class MemoryStore:
             }
         ]
 
-    async def store_memory(self, category: str, key: str, value: str) -> Dict[str, Any]:
+    async def store_memory(self, category: str, key: str, value: str) -> dict[str, Any]:
         # Check if key exists and update
         for mem in self.memories:
             if mem["key"].lower() == key.lower():
@@ -32,7 +33,7 @@ class MemoryStore:
         self.memories.append(mem)
         return mem
 
-    async def retrieve_memories(self, query: str) -> List[Dict[str, Any]]:
+    async def retrieve_memories(self, query: str) -> list[dict[str, Any]]:
         q_lower = query.lower().strip()
         matches = []
         for mem in self.memories:

@@ -1,10 +1,27 @@
-from typing import Dict, Any, Optional, List, Tuple
+import os
+from typing import Any
+
 from app.config.settings import settings
 
+
+def hardware_is_real() -> bool:
+    """Whether a command here can reach a physical appliance at all."""
+
+    mode = (os.environ.get("HOME_DEVICE_MODE") or settings.HOME_DEVICE_MODE or "").upper()
+    return mode not in {"", "SIMULATED", "MOCK", "DEMO"}
+
+
 class SmartDeviceRegistry:
+    """In-memory device state.
+
+    With HOME_DEVICE_MODE="SIMULATED" (the default) this registry is the only
+    thing that changes: no MQTT/IR packet leaves the machine. Every reader that
+    needs to know the difference uses `hardware_is_real`.
+    """
+
     def __init__(self):
         # Default registered smart home devices
-        self.devices: Dict[str, Dict[str, Any]] = {
+        self.devices: dict[str, dict[str, Any]] = {
             "dev_bed_fan": {
                 "id": "dev_bed_fan",
                 "name": "Bedroom Fan",
@@ -52,34 +69,40 @@ class SmartDeviceRegistry:
             }
         }
 
-    async def resolve_device(self, room: str, device_type: str) -> Optional[Dict[str, Any]]:
+    async def resolve_device(self, room: str, device_type: str) -> dict[str, Any] | None:
         room_lower = room.lower().strip()
         type_lower = device_type.lower().strip()
         
         for dev in self.devices.values():
-            if dev["room"].lower() in room_lower or room_lower in dev["room"].lower():
-                if dev["device_type"].lower() in type_lower or type_lower in dev["device_type"].lower():
-                    return dev
+            room_matches = dev["room"].lower() in room_lower or room_lower in dev["room"].lower()
+            type_matches = dev["device_type"].lower() in type_lower or type_lower in dev["device_type"].lower()
+            if room_matches and type_matches:
+                return dev
         return None
 
     async def execute_device_command(
-        self, device_id: str, power: bool, speed: Optional[int] = None
-    ) -> Tuple[bool, bool, Dict[str, Any], Optional[str]]:
+        self, device_id: str, power: bool, speed: int | None = None
+    ) -> tuple[bool, bool, dict[str, Any], str | None]:
+        """Update the registry's state and report whether real hardware saw it.
+
+        Returns (accepted, reached_hardware, state, error). The second value is the
+        honest one: with HOME_DEVICE_MODE=SIMULATED nothing leaves this machine, so
+        no caller may describe it as a physical switch.
+        """
+
         if device_id not in self.devices:
             return False, False, {}, "Device not found"
-        
+
         device = self.devices[device_id]
-        
-        # Capability validation
+
         if speed is not None and "speed" not in device["capabilities"]:
             return False, False, device["state"], f"Device '{device['name']}' does not support speed control."
 
-        # Update state
         device["state"]["power"] = power
         if speed is not None:
             device["state"]["speed"] = speed
 
-        # Verified execution result
-        return True, True, device["state"], None
+        return True, hardware_is_real(), dict(device["state"]), None
+
 
 device_registry = SmartDeviceRegistry()

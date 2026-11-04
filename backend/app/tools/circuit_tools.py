@@ -1,6 +1,9 @@
 from typing import Any
+
 from pydantic import BaseModel, Field
+
 from app.tools.base import BaseTool, ToolResult
+
 
 class CreateCircuitInput(BaseModel):
     circuit_type: str = Field(default="led", description="Circuit pattern type: led, series, parallel")

@@ -1,6 +1,9 @@
-from typing import Optional, Any
+from typing import Any
+
 from pydantic import BaseModel, Field
+
 from app.tools.base import BaseTool, ToolResult
+
 
 class MemoryStoreInput(BaseModel):
     category: str = Field(description="Memory category: preference, fact, alias, room_mapping")

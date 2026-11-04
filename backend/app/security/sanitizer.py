@@ -1,7 +1,7 @@
-import os
 import re
 from pathlib import Path
-from typing import List
+
+from app.security.path_guard import PathRejected, guard, workspace_root
 
 ALLOWED_APPS = {
     "chrome": ["chrome", "google-chrome", "chrome.exe"],
@@ -12,22 +12,17 @@ ALLOWED_APPS = {
     "terminal": ["cmd.exe", "wt.exe", "powershell.exe"]
 }
 
-SAFE_BASE_DIR = Path(os.getcwd()).resolve()
+def validate_safe_path(target_path: str) -> Path:
+    """Confine a tool's path to the workspace root, using the one guard the brain trusts.
 
-def validate_safe_path(target_path: str, allow_outside: bool = False) -> Path:
-    """Ensures file paths prevent directory traversal attacks."""
-    resolved = Path(target_path).resolve()
-    if not allow_outside:
-        try:
-            resolved.relative_to(SAFE_BASE_DIR)
-        except ValueError:
-            # If path is inside user profile/desktop, also permit
-            user_profile = Path(os.path.expanduser("~")).resolve()
-            try:
-                resolved.relative_to(user_profile)
-            except ValueError:
-                raise PermissionError(f"Path access denied: {target_path} is outside allowed boundaries.")
-    return resolved
+    The previous version here fell back to "anything inside the user profile is
+    fine", which made ~/.ssh a legal target for a model-authored path.
+    """
+
+    try:
+        return guard(target_path, root=workspace_root()).resolved
+    except PathRejected as exc:
+        raise PermissionError(f"Path access denied: {target_path} - {exc.reason}") from exc
 
 def sanitize_input(text: str) -> str:
     """Removes unsafe control characters."""
@@ -35,12 +30,18 @@ def sanitize_input(text: str) -> str:
         return ""
     return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
 
-def get_allowed_app_command(app_name: str) -> List[str]:
+def get_allowed_app_command(app_name: str) -> list[str]:
+    """Only names on the allowlist may be launched.
+
+    The old fallback ran *any* alphanumeric string the model produced as a
+    program, which made "open whatever I say" a legal instruction.
+    """
+
     app_lower = app_name.lower().strip()
     for key, cmds in ALLOWED_APPS.items():
         if key in app_lower or app_lower in key:
             return cmds
-    # Default fallback to app_name if simple alphanumeric
-    if re.match(r'^[a-zA-Z0-9_\-\.]+$', app_name):
-        return [app_name]
-    raise ValueError(f"Application '{app_name}' is not in the allowed policy list.")
+    raise ValueError(
+        f"Application '{app_name}' is not in the allowed policy list. "
+        f"Allowed: {', '.join(sorted(ALLOWED_APPS))}."
+    )

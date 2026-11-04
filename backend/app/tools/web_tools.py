@@ -1,8 +1,11 @@
 from typing import Any
+
 import httpx
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
+
 from app.tools.base import BaseTool, ToolResult
+
 
 class WebSearchInput(BaseModel):
     query: str = Field(description="Search query string")
