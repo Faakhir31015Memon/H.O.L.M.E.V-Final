@@ -66,7 +66,7 @@ respond; it does not assert them.
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-python -m pytest -q          # 227 passed, 1 skipped (that 1 is a POSIX symlink test, no-op on Windows)
+python -m pytest -q          # 237 passed, 1 skipped (that 1 is a POSIX symlink test, no-op on Windows)
 python -m ruff check app tests
 ```
 

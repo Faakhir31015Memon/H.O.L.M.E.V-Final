@@ -69,11 +69,19 @@ class CircuitSimulator:
         v_led = led["forward_voltage"] if led else 0.0
 
         if total_r <= 0.01:
+            # This model has no internal resistance, so a "short" is a loop whose only
+            # resistance is the fallback. Report what the arithmetic actually gives
+            # instead of a round number invented to look alarming.
+            short_ma = round((v_source - v_led) / total_r * 1000.0, 2) if total_r > 0 else 0.0
             return {
                 "status": "SHORT_CIRCUIT",
-                "current_ma": 9999.0,
+                "current_ma": short_ma,
                 "led_illuminated": False,
-                "error": "WARNING: Short circuit detected! High current draw."
+                "error": "WARNING: Short circuit detected! High current draw.",
+                "note": (
+                    "current comes from V/R with R below 0.01 ohm; a real supply has internal "
+                    "resistance this model does not have, so treat the figure as 'very high', not measured"
+                ) if total_r > 0 else "resistance is exactly zero, which this model cannot divide by",
             }
 
         # Current I = (V_battery - V_led) / R

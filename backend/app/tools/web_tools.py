@@ -34,11 +34,19 @@ class WebSearchTool(BaseTool):
                 for result in soup.find_all("a", class_="result__snippet", limit=5):
                     results.append(result.get_text(strip=True))
 
+                # The request really happened, but these are strangers' words scraped off a
+                # results page - and an empty scrape is reported as empty, not padded.
                 return ToolResult(
                     success=True,
-                    verified=True,
-                    data={"query": query, "snippets": results},
-                    error=None
+                    verified=False,
+                    data={
+                        "query": query,
+                        "snippets": results,
+                        "result_count": len(results),
+                        "source": "html.duckduckgo.com",
+                        "note": "third-party page text, not a checked fact",
+                    },
+                    error=None,
                 )
         except Exception as e:
             return ToolResult(success=False, verified=False, error=str(e))
